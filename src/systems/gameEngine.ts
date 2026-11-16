@@ -1,5 +1,5 @@
 import {
-  type GameState, type AutomationOrder, type AutomationMode, type Resident,
+  type GameState, type AutomationMode, type Resident,
   createInitialState, addResource, removeResource, addXp, addLog,
   getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
   getAvailableWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
@@ -347,8 +347,8 @@ export function toggleAutomationOrder(state: GameState, orderId: string): void {
 }
 
 export function removeAutomationOrder(state: GameState, orderId: string): void {
+  // Keep any already-paid batch in the queue; removing the order only stops future batches.
   state.automationOrders = state.automationOrders.filter(o => o.id !== orderId);
-  state.craftQueue = state.craftQueue.filter(item => item.automationOrderId !== orderId);
 }
 
 function processAutomations(state: GameState): void {
@@ -359,6 +359,7 @@ function processAutomations(state: GameState): void {
     if (state.craftQueue.some(item => item.automationOrderId === order.id)) continue;
     const recipe = RECIPES[order.recipeId];
     if (!recipe || !canUseRecipe(state, recipe)) continue;
+    if ((recipe.requiredBuilding || 'taller') !== order.buildingId) continue;
     const output = recipe.outputs.find(o => o.resourceId !== 'tool');
     if (order.mode === 'mantener' && output && (state.resources[output.resourceId as ResourceId] || 0) >= order.targetAmount) continue;
     if (state.craftQueue.length >= 12) break;
