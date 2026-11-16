@@ -707,5 +707,6 @@ function checkObjectives(state: GameState): void {
 export function resetGame(): GameState {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
+  localStorage.removeItem(OLDEST_STORAGE_KEY);
   return createInitialState();
 }
