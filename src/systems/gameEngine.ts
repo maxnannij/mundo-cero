@@ -234,7 +234,12 @@ function completeActivityAction(state: GameState, act: ActivityDef): boolean {
   const yieldMult = (toolBonuses.yieldMult || 1) * skillBonuses.yieldMult;
   for (const out of act.outputs) {
     const chance = Math.min(1, Math.max(0, (out.chance ?? 1) + bonuses.specialChance));
-    if (Math.random() <= chance) addResource(state, out.resourceId, Math.max(1, Math.floor(out.amount * yieldMult)));
+    if (Math.random() <= chance) {
+      const rawAmount = out.amount * yieldMult;
+      let amount = Math.floor(rawAmount);
+      if (Math.random() < rawAmount - amount) amount += 1;
+      addResource(state, out.resourceId, Math.max(1, amount));
+    }
   }
   for (const message of addXp(state, act.skillId, act.xp)) addLog(state, message);
   for (const message of addMasteryXp(state, act.skillId, act.xp)) addLog(state, message);
@@ -275,7 +280,11 @@ function finishCraft(state: GameState, recipe: RecipeDef): void {
         addLog(state, `¡Fabricaste ${TOOLS[out.toolId]?.name || out.toolId}!`);
       }
     } else {
-      addResource(state, out.resourceId as ResourceId, out.amount);
+      const bonus = getSkillBonuses(state, recipe.skillId).yieldMult;
+      const rawAmount = out.amount * bonus;
+      let amount = Math.floor(rawAmount);
+      if (Math.random() < rawAmount - amount) amount += 1;
+      addResource(state, out.resourceId as ResourceId, Math.max(1, amount));
     }
   }
   for (const message of addXp(state, recipe.skillId, recipe.xp)) addLog(state, message);
