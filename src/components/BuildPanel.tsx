@@ -3,9 +3,12 @@ import { BUILDING_LIST } from '../data/buildings';
 import { RESOURCES } from '../data/resources';
 import { isTechUnlocked, canAfford } from '../store/gameState';
 import { getBuildingUpgradeCosts } from '../systems/gameEngine';
+import { getCalendarInfo, seasonMultiplier } from '../data/calendar';
 
 export function BuildPanel() {
   const { state, doBuild, doUpgrade } = useGame();
+  const season = getCalendarInfo(state.calendar).season;
+  const healthFactor = 0.5 + (state.population.residents.length ? state.population.residents.reduce((sum, r) => sum + r.health, 0) / (state.population.residents.length * 100) : 0) * 0.5;
   return (
     <div className="panel">
       <h2>🏗️ Construcción</h2>
@@ -33,7 +36,7 @@ export function BuildPanel() {
                 <>
                   <div className="b-prod">
                     {def.production.map(p => (
-                      <span key={p.resourceId}>{(p.amountPerMinute * (1 + (level - 1) * 0.35) * count * staffingRatio).toFixed(2)} {RESOURCES[p.resourceId]?.name}/min</span>
+                      <span key={p.resourceId}>{(p.amountPerMinute * (1 + (level - 1) * 0.35) * count * staffingRatio * healthFactor * seasonMultiplier(season, p.seasonMultipliers)).toFixed(2)} {RESOURCES[p.resourceId]?.name}/min</span>
                     ))}
                   </div>
                   <div className="b-meta">Personal: {instance?.workersAssigned || 0}/{staffingMax} · {staffingRatio >= 1 ? 'Dotación completa' : 'Asigná trabajadores en Población'}</div>
