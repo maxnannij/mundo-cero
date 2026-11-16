@@ -632,3 +632,15 @@ body {
 .guide-icon { font-size: 1.35rem; width: 1.8rem; text-align: center; flex: 0 0 auto; }
 .guide-card p { color: var(--muted); font-size: .82rem; margin-bottom: .4rem; }
 .guide-card small { display: block; color: var(--text); font-size: .76rem; line-height: 1.5; overflow-wrap: anywhere; }
+
+
+/* Equipamiento individual de aldeanos */
+.resident-equipment { margin: .65rem 0 0 2.1rem; padding: .65rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.resident-equipment-heading, .resident-equipment-row { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+.resident-equipment-heading { margin-bottom: .45rem; }
+.resident-equipment-heading small, .resident-equipment-row small { color: var(--muted); font-size: .75rem; }
+.resident-equipment-row > span { font-size: .82rem; }
+.resident-tool-select { width: min(100%, 290px); font-size: .8rem; }
+.resident-equipment-slots { display: flex; flex-wrap: wrap; gap: .4rem .8rem; margin-top: .5rem; color: var(--muted); font-size: .72rem; }
+.resident-equipment-slots b { color: var(--text); font-weight: 500; }
+@media (max-width: 600px) { .resident-equipment { margin-left: 0; } .resident-equipment-row { align-items: stretch; flex-direction: column; } .resident-tool-select { width: 100%; } }

@@ -55,12 +55,15 @@ export function InventoryPanel() {
           {state.ownedTools.map(id => {
             const t = TOOLS[id];
             if (!t) return null;
-            const equipped = state.equippedTools[t.category] === id;
+            const available = state.toolInventory[id] || 0;
+            const equippedCount = state.population.residents.filter(resident => resident.equipment?.tool === id).length;
+            const equipped = equippedCount > 0;
             return (
               <div key={id} className={`inv-item ${equipped ? 'equipped' : ''}`}>
                 <span className="inv-icon">{t.icon}</span>
                 <div>
-                  <div className="inv-name">{t.name} {equipped ? '(equipada)' : ''}</div>
+                  <div className="inv-name">{t.name}</div>
+                  <div className="inv-amount">{available} en depósito · {equippedCount} equipada(s)</div>
                 </div>
               </div>
             );

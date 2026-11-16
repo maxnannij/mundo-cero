@@ -2,13 +2,12 @@ import { useState } from 'react';
 import { useGame } from '../store/GameContext';
 import { SKILLS, SKILL_LIST, xpForLevel, type SkillId } from '../data/skills';
 import { isTechUnlocked, hasBuilding, getAvailableWorkers } from '../store/gameState';
-import { TOOLS } from '../data/tools';
 import { RESOURCES } from '../data/resources';
 import { getCalendarInfo } from '../data/calendar';
 import { masteryXpForNext } from '../store/gameState';
 
 export function SkillsPanel() {
-  const { state, startAct, stopAct, doEquip, doChooseSpecialization } = useGame();
+  const { state, startAct, stopAct, doChooseSpecialization } = useGame();
   const [selectedSkill, setSelectedSkill] = useState<SkillId>('tala');
   const [target, setTarget] = useState<string>('');
   const skill = SKILLS[selectedSkill];
@@ -71,23 +70,7 @@ export function SkillsPanel() {
           </div>
         </div>
 
-        {(selectedSkill === 'tala' || selectedSkill === 'mineria') && (
-          <div className="tool-section">
-            <h3>Herramienta equipada</h3>
-            <div className="tool-row">
-              {Object.values(TOOLS).filter(t => t.category === (selectedSkill === 'tala' ? 'hacha' : 'pico')).map(t => {
-                const owned = state.ownedTools.includes(t.id);
-                const equipped = state.equippedTools[t.category] === t.id;
-                return (
-                  <button key={t.id} className={`tool-btn ${equipped ? 'equipped' : ''} ${!owned ? 'locked' : ''}`}
-                    disabled={!owned} onClick={() => doEquip(t.id)} title={t.description}>
-                    {t.icon} {t.name} {equipped ? '✓' : ''}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+        <p className="recipe-meta">Las herramientas se equipan individualmente desde la ficha de cada aldeano en Población.</p>
 
         <h3>Actividades · {season}</h3>
         <p className={availableWorkers > 0 ? 'good-text' : 'warning-text'}>

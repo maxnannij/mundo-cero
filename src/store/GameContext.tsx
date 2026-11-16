@@ -4,6 +4,7 @@ import {
   loadGame, saveGame, tick, processOffline, startActivity, stopActivity, queueCraft,
   buildBuilding, upgradeBuilding, researchTech, equipTool, resetGame, exportSave, importSave,
   assignWorker, setReproduction, createAutomationOrder, toggleAutomationOrder, removeAutomationOrder, chooseSpecialization,
+  equipResidentTool, unequipResidentTool,
 } from '../systems/gameEngine';
 import type { SkillId } from '../data/skills';
 
@@ -17,6 +18,8 @@ type Action =
   | { type: 'UPGRADE'; buildingId: string }
   | { type: 'RESEARCH'; techId: string }
   | { type: 'EQUIP'; toolId: string }
+  | { type: 'EQUIP_RESIDENT_TOOL'; residentId: string; toolId: string }
+  | { type: 'UNEQUIP_RESIDENT_TOOL'; residentId: string }
   | { type: 'ASSIGN_WORKER'; buildingId: string; delta: number }
   | { type: 'SET_REPRODUCTION'; enabled: boolean }
   | { type: 'CHOOSE_SPECIALIZATION'; skillId: SkillId; specialization: 'velocidad' | 'rendimiento' }
@@ -43,6 +46,8 @@ function reducer(state: GameState, action: Action): GameState {
     case 'UPGRADE': upgradeBuilding(next, action.buildingId); break;
     case 'RESEARCH': researchTech(next, action.techId); break;
     case 'EQUIP': equipTool(next, action.toolId); break;
+    case 'EQUIP_RESIDENT_TOOL': equipResidentTool(next, action.residentId, action.toolId); break;
+    case 'UNEQUIP_RESIDENT_TOOL': unequipResidentTool(next, action.residentId); break;
     case 'ASSIGN_WORKER': assignWorker(next, action.buildingId, action.delta); break;
     case 'SET_REPRODUCTION': setReproduction(next, action.enabled); break;
     case 'CHOOSE_SPECIALIZATION': chooseSpecialization(next, action.skillId, action.specialization); break;
@@ -64,6 +69,8 @@ interface GameContextValue {
   doUpgrade: (id: string) => void;
   doResearch: (id: string) => void;
   doEquip: (id: string) => void;
+  doEquipResidentTool: (residentId: string, toolId: string) => void;
+  doUnequipResidentTool: (residentId: string) => void;
   doAssignWorker: (buildingId: string, delta: number) => void;
   doSetReproduction: (enabled: boolean) => void;
   doChooseSpecialization: (skillId: SkillId, specialization: 'velocidad' | 'rendimiento') => void;
@@ -121,6 +128,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const doUpgrade = useCallback((id: string) => dispatch({ type: 'UPGRADE', buildingId: id }), []);
   const doResearch = useCallback((id: string) => dispatch({ type: 'RESEARCH', techId: id }), []);
   const doEquip = useCallback((id: string) => dispatch({ type: 'EQUIP', toolId: id }), []);
+  const doEquipResidentTool = useCallback((residentId: string, toolId: string) => dispatch({ type: 'EQUIP_RESIDENT_TOOL', residentId, toolId }), []);
+  const doUnequipResidentTool = useCallback((residentId: string) => dispatch({ type: 'UNEQUIP_RESIDENT_TOOL', residentId }), []);
   const doAssignWorker = useCallback((buildingId: string, delta: number) => dispatch({ type: 'ASSIGN_WORKER', buildingId, delta }), []);
   const doSetReproduction = useCallback((enabled: boolean) => dispatch({ type: 'SET_REPRODUCTION', enabled }), []);
   const doChooseSpecialization = useCallback((skillId: SkillId, specialization: 'velocidad' | 'rendimiento') => dispatch({ type: 'CHOOSE_SPECIALIZATION', skillId, specialization }), []);
@@ -148,7 +157,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   return (
     <GameContext.Provider value={{
       state, dispatch, startAct, stopAct, doCraft, doBuild, doUpgrade, doResearch, doEquip,
-      doAssignWorker, doSetReproduction, doChooseSpecialization, doCreateAutomation, doToggleAutomation, doRemoveAutomation,
+      doEquipResidentTool, doUnequipResidentTool, doAssignWorker, doSetReproduction, doChooseSpecialization, doCreateAutomation, doToggleAutomation, doRemoveAutomation,
       doReset, doRestart, doExport, doImport, saveNow,
     }}>
       {children}
