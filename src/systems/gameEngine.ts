@@ -317,7 +317,8 @@ export function createAutomationOrder(
 ): boolean {
   const recipe = RECIPES[recipeId];
   if (!recipe || !hasBuilding(state, buildingId) || !canUseRecipe(state, recipe)) return false;
-  if (recipe.requiredBuilding && recipe.requiredBuilding !== buildingId) return false;
+  const productionFacility = recipe.requiredBuilding || 'taller';
+  if (productionFacility !== buildingId) return false;
   if (state.automationOrders.some(o => o.recipeId === recipeId && o.buildingId === buildingId)) return false;
   const output = recipe.outputs.find(o => o.resourceId !== 'tool');
   if (mode === 'mantener' && (!output || !Number.isFinite(targetAmount) || targetAmount < 1)) return false;
@@ -344,6 +345,8 @@ export function removeAutomationOrder(state: GameState, orderId: string): void {
 function processAutomations(state: GameState): void {
   for (const order of [...state.automationOrders].sort((a, b) => b.priority - a.priority)) {
     if (!order.enabled || !hasBuilding(state, order.buildingId)) continue;
+    const facility = state.buildings.find(b => b.id === order.buildingId);
+    if (BUILDINGS[order.buildingId]?.production && (facility?.workersAssigned || 0) < 1) continue;
     if (state.craftQueue.some(item => item.automationOrderId === order.id)) continue;
     const recipe = RECIPES[order.recipeId];
     if (!recipe || !canUseRecipe(state, recipe)) continue;
