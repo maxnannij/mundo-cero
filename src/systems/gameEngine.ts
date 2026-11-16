@@ -2,7 +2,7 @@ import {
   type GameState, type AutomationOrder, type AutomationMode, type Resident,
   createInitialState, addResource, removeResource, addXp, addLog,
   getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
-  getAvailableWorkers, hasBuilding, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
+  getAvailableWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
   ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
@@ -37,7 +37,7 @@ function normalizeSave(value: unknown): GameState | null {
   for (const id of Object.keys(skills) as SkillId[]) {
     const item = raw.skills?.[id];
     if (item && Number.isFinite(item.level) && Number.isFinite(item.xp)) {
-      skills[id] = { level: Math.max(1, Math.min(99, Math.floor(item.level))), xp: Math.max(0, item.xp) };
+      skills[id] = { level: Math.max(1, Math.min(99, Math.floor(item.level))), xp: Math.max(0, item.xp), masteryLevel: Math.max(0, Math.min(20, Math.floor(Number(item.masteryLevel) || 0))), masteryXp: Math.max(0, Number(item.masteryXp) || 0), specialization: item.specialization === 'velocidad' || item.specialization === 'rendimiento' ? item.specialization : undefined };
     }
   }
   const buildings = Array.isArray(raw.buildings)
@@ -229,13 +229,15 @@ function completeActivityAction(state: GameState, act: ActivityDef): boolean {
     return false;
   }
   for (const input of act.inputs ?? []) removeResource(state, input.resourceId, input.amount);
-  const bonuses = getToolBonuses(state, act.requiredTool || 'ninguna');
-  const yieldMult = bonuses.yieldMult || 1;
+  const toolBonuses = getToolBonuses(state, act.requiredTool || 'ninguna');
+  const skillBonuses = getSkillBonuses(state, act.skillId);
+  const yieldMult = (toolBonuses.yieldMult || 1) * skillBonuses.yieldMult;
   for (const out of act.outputs) {
     const chance = Math.min(1, Math.max(0, (out.chance ?? 1) + bonuses.specialChance));
     if (Math.random() <= chance) addResource(state, out.resourceId, Math.max(1, Math.floor(out.amount * yieldMult)));
   }
   for (const message of addXp(state, act.skillId, act.xp)) addLog(state, message);
+  for (const message of addMasteryXp(state, act.skillId, act.xp)) addLog(state, message);
   if (state.activeActivity) {
     state.activeActivity.actionsDone += 1;
     state.totalActions[act.id] = (state.totalActions[act.id] || 0) + 1;
@@ -277,6 +279,7 @@ function finishCraft(state: GameState, recipe: RecipeDef): void {
     }
   }
   for (const message of addXp(state, recipe.skillId, recipe.xp)) addLog(state, message);
+  for (const message of addMasteryXp(state, recipe.skillId, recipe.xp)) addLog(state, message);
   checkObjectives(state);
 }
 
@@ -360,8 +363,9 @@ function processContinuousSystems(state: GameState, deltaMs: number): void {
     const act = getActivity(active.skillId, active.activityId);
     if (!act) state.activeActivity = null;
     else {
-      const speed = getToolBonuses(state, act.requiredTool || 'ninguna').speedMult || 1;
-      const duration = Math.max(100, act.durationMs * speed);
+      const toolSpeed = getToolBonuses(state, act.requiredTool || 'ninguna').speedMult || 1;
+      const skillSpeed = getSkillBonuses(state, act.skillId).speedMult;
+      const duration = Math.max(100, act.durationMs * toolSpeed * skillSpeed);
       active.progressMs += deltaMs;
       let actions = 0;
       while (state.activeActivity && state.activeActivity.progressMs >= duration && actions++ < 20_000) {
@@ -561,6 +565,14 @@ export function assignWorker(state: GameState, buildingId: string, delta: number
   return true;
 }
 
+export function chooseSpecialization(state: GameState, skillId: SkillId, specialization: 'velocidad' | 'rendimiento'): boolean {
+  const skill = state.skills[skillId];
+  if (!skill || skill.level < 25 || skill.specialization) return false;
+  skill.specialization = specialization;
+  addLog(state, `${SKILLS[skillId].name}: especialización elegida: ${specialization === 'velocidad' ? 'Velocidad' : 'Rendimiento'}.`);
+  return true;
+}
+
 export function setReproduction(state: GameState, enabled: boolean): void {
   state.population.reproductionEnabled = enabled;
   addLog(state, enabled ? 'La reproducción de la comunidad está habilitada.' : 'La reproducción de la comunidad está pausada.');
@@ -574,6 +586,8 @@ export function researchTech(state: GameState, techId: string): boolean {
   for (const cost of tech.cost) removeResource(state, cost.resourceId, cost.amount);
   removeResource(state, 'conocimiento', tech.knowledgeCost);
   state.unlockedTechs.push(techId);
+  for (const message of addXp(state, 'investigacion', tech.knowledgeCost * 2)) addLog(state, message);
+  for (const message of addMasteryXp(state, 'investigacion', tech.knowledgeCost * 2)) addLog(state, message);
   addLog(state, `¡Investigación completada: ${tech.name}!`);
   checkObjectives(state);
   return true;
