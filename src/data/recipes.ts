@@ -8,6 +8,7 @@ export interface RecipeDef {
   skillId: SkillId;
   requiredLevel: number;
   requiredTech?: string;
+  requiredBuilding?: string;
   durationMs: number;
   xp: number;
   inputs: { resourceId: ResourceId; amount: number }[];
@@ -20,6 +21,7 @@ export const RECIPES: Record<string, RecipeDef> = {
     id: 'cuerda',
     name: 'Cuerda',
     description: 'Trenzar fibras para crear cuerda resistente.',
+    requiredBuilding: 'taller',
     skillId: 'artesania',
     requiredLevel: 1,
     durationMs: 4000,
@@ -32,6 +34,7 @@ export const RECIPES: Record<string, RecipeDef> = {
     id: 'hacha_rudimentaria',
     name: 'Hacha rudimentaria',
     description: 'Una herramienta básica de madera y piedra.',
+    requiredBuilding: 'taller',
     skillId: 'artesania',
     requiredLevel: 1,
     durationMs: 6000,
@@ -48,6 +51,7 @@ export const RECIPES: Record<string, RecipeDef> = {
     id: 'pico_rudimentario',
     name: 'Pico rudimentario',
     description: 'Herramienta básica para minería.',
+    requiredBuilding: 'taller',
     skillId: 'artesania',
     requiredLevel: 1,
     durationMs: 6000,
@@ -64,6 +68,7 @@ export const RECIPES: Record<string, RecipeDef> = {
     id: 'hacha_piedra',
     name: 'Hacha de piedra',
     description: 'Mejor hacha con cabeza de piedra bien atada.',
+    requiredBuilding: 'taller',
     skillId: 'artesania',
     requiredLevel: 5,
     requiredTech: 'herramientas_piedra',
@@ -82,6 +87,7 @@ export const RECIPES: Record<string, RecipeDef> = {
     id: 'pico_piedra',
     name: 'Pico de piedra',
     description: 'Pico mejorado para extraer minerales.',
+    requiredBuilding: 'taller',
     skillId: 'artesania',
     requiredLevel: 5,
     requiredTech: 'herramientas_piedra',
@@ -100,6 +106,7 @@ export const RECIPES: Record<string, RecipeDef> = {
     id: 'carbon_vegetal',
     name: 'Carbón vegetal',
     description: 'Quemar madera en condiciones controladas.',
+    requiredBuilding: 'fogata',
     skillId: 'artesania',
     requiredLevel: 3,
     requiredTech: 'control_fuego',
@@ -113,6 +120,7 @@ export const RECIPES: Record<string, RecipeDef> = {
     id: 'comida_bayas',
     name: 'Bayas cocidas',
     description: 'Cocinar bayas para mejorar su valor nutricional.',
+    requiredBuilding: 'fogata',
     skillId: 'cocina',
     requiredLevel: 1,
     requiredTech: 'control_fuego',
