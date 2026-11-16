@@ -11,6 +11,7 @@ export interface CraftQueueItem { recipeId: string; remaining: number; progressM
 export interface Resident {
   id: string; name: string; sex: 'hombre' | 'mujer'; ageDays: number; health: number;
   hungerDays: number; coldDays: number; partnerId?: string; parents?: string[];
+  lifeExpectancyYears: number;
   pregnancyDaysRemaining?: number; conceptionProgressDays?: number; childrenBorn?: number;
 }
 export interface PopulationState { residents: Resident[]; nextResidentId: number; births: number; reproductionEnabled: boolean; }
@@ -27,17 +28,24 @@ export interface GameState {
   completedObjectives: string[]; totalActions: Record<string, number>; log: { time: number; message: string }[];
   calendar: CalendarState; population: PopulationState; settings: { offlineCapHours: number };
 }
-export const SAVE_VERSION = 2;
-export const STORAGE_KEY = 'mundo-cero-save-v2';
-export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v1';
+export const SAVE_VERSION = 3;
+export const STORAGE_KEY = 'mundo-cero-save-v3';
+export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v2';
+export const OLDEST_STORAGE_KEY = 'mundo-cero-save-v1';
 export const ADULT_AGE_DAYS = 18 * DAYS_PER_YEAR;
 export const MAX_POPULATION = 30;
+
+// Distribución triangular centrada en 90 años: longevidad individual entre 70 y 110.
+export function generateLifeExpectancyYears(): number {
+  const sample = Math.random() + Math.random() + Math.random() + Math.random();
+  return Math.round((70 + sample * 10) * 10) / 10;
+}
 
 export function createInitialPopulation(): PopulationState {
   return {
     residents: [
-      { id: 'resident-1', name: 'Aren', sex: 'hombre', ageDays: 25 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-2' },
-      { id: 'resident-2', name: 'Lira', sex: 'mujer', ageDays: 24 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-1', pregnancyDaysRemaining: 0, conceptionProgressDays: 0, childrenBorn: 0 },
+      { id: 'resident-1', name: 'Aren', sex: 'hombre', ageDays: 25 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-2', lifeExpectancyYears: generateLifeExpectancyYears() },
+      { id: 'resident-2', name: 'Lira', sex: 'mujer', ageDays: 24 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-1', lifeExpectancyYears: generateLifeExpectancyYears(), pregnancyDaysRemaining: 0, conceptionProgressDays: 0, childrenBorn: 0 },
     ],
     nextResidentId: 3, births: 0, reproductionEnabled: true,
   };
