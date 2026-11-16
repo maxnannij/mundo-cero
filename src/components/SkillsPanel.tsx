@@ -101,8 +101,8 @@ export function SkillsPanel() {
             const seasonReady = !act.seasonsAvailable || act.seasonsAvailable.includes(season);
             const materialsReady = !act.inputs || act.inputs.every(i => (state.resources[i.resourceId] || 0) >= i.amount);
             const unlocked = levelReady && techReady && buildingReady && seasonReady;
-            const activeTask = activeActivities.find(task => task.skillId === selectedSkill && task.activityId === act.id);
-            const isActive = !!activeTask;
+            const activeTasksForActivity = activeActivities.filter(task => task.skillId === selectedSkill && task.activityId === act.id);
+            const isActive = activeTasksForActivity.length > 0;
             const lockMessage = !levelReady ? 'Requiere nivel ' + act.requiredLevel
               : !techReady ? 'Requiere tecnología: ' + act.unlockTech
               : !buildingReady ? 'Requiere instalación: ' + act.requiredBuilding
@@ -131,18 +131,15 @@ export function SkillsPanel() {
                   <div className="locked-msg">{lockMessage}</div>
                 ) : (
                   <div className="act-actions">
-                    {isActive ? (
-                      <button className="btn danger" onClick={() => activeTask && stopAct(activeTask.id)}>Detener</button>
-                    ) : (
-                      <>
-                        <button className="btn primary" disabled={!materialsReady || availableWorkers < 1} onClick={() => startAct(selectedSkill, act.id)}>Iniciar</button>
-                        <input type="number" placeholder="Acciones" min={1} value={target}
-                          onChange={e => setTarget(e.target.value)} className="target-input" />
-                        <button className="btn" disabled={!materialsReady || availableWorkers < 1 || !Number.isFinite(Number(target)) || Number(target) < 1}
-                          onClick={() => startAct(selectedSkill, act.id, Number(target))}>Hasta X acciones</button>
-                      </>
-                    )}
-                    {!isActive && availableWorkers < 1 && <small className="warning-text">No hay trabajadores libres. Liberá uno de una instalación o detené una tarea.</small>}
+                    <button className="btn primary" disabled={!materialsReady || availableWorkers < 1} onClick={() => startAct(selectedSkill, act.id)}>
+                      {isActive ? 'Asignar otro trabajador' : 'Iniciar'}
+                    </button>
+                    <input type="number" placeholder="Acciones" min={1} value={target}
+                      onChange={e => setTarget(e.target.value)} className="target-input" />
+                    <button className="btn" disabled={!materialsReady || availableWorkers < 1 || !Number.isFinite(Number(target)) || Number(target) < 1}
+                      onClick={() => startAct(selectedSkill, act.id, Number(target))}>Hasta X acciones</button>
+                    {isActive && <small className="good-text">En curso: {activeTasksForActivity.length} trabajador(es) · podés sumar otro.</small>}
+                    {availableWorkers < 1 && <small className="warning-text">No hay trabajadores libres. Liberá uno de una instalación o detené una tarea.</small>}
                   </div>
                 )}
               </div>
