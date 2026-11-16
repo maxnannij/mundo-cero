@@ -14,6 +14,7 @@ const TABS = [
   { id: 'inventario', label: 'Inventario', icon: '📦' },
   { id: 'objetivos', label: 'Objetivos', icon: '🎯' },
   { id: 'ajustes', label: 'Ajustes', icon: '⚙️' },
+  { id: 'ayuda', label: 'Guía', icon: '📖' },
 ];
 
 export function Nav({ tab, setTab }: NavProps) {
