@@ -612,6 +612,11 @@ function processDailySystems(state: GameState, previousSeason: SeasonId): void {
 }
 
 export function tick(state: GameState, deltaMs: number): void {
+  // No simular el tiempo una vez extinguida la población.
+  if (state.population.residents.length === 0) {
+    state.lastTick = Date.now();
+    return;
+  }
   let remaining = Math.min(Math.max(0, deltaMs), MAX_SIMULATION_MS);
   let safety = 0;
   while (remaining > 0 && safety++ < 20_000) {
@@ -625,6 +630,7 @@ export function tick(state: GameState, deltaMs: number): void {
       state.calendar.dayProgressMs = Math.max(0, state.calendar.dayProgressMs - GAME_DAY_MS);
       state.calendar.totalDays += 1;
       processDailySystems(state, previousSeason);
+      if (state.population.residents.length === 0) break;
     }
   }
   state.lastTick = Date.now();
