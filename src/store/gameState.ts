@@ -2,174 +2,131 @@ import { RESOURCES, type ResourceId } from '../data/resources';
 import { SKILLS, type SkillId, xpForLevel } from '../data/skills';
 import { TOOLS } from '../data/tools';
 import { BUILDINGS } from '../data/buildings';
+import { getCalendarInfo, type CalendarState, type SeasonId, seasonMultiplier } from '../data/calendar';
 
-export interface SkillState {
-  level: number;
-  xp: number;
+export interface SkillState { level: number; xp: number; }
+export interface BuildingInstance { id: string; level: number; count: number; workersAssigned: number; }
+export interface ActiveActivity { skillId: SkillId; activityId: string; startTime: number; progressMs: number; targetAmount?: number; actionsDone: number; }
+export interface CraftQueueItem { recipeId: string; remaining: number; progressMs: number; startTime: number; automationOrderId?: string; }
+export interface Resident {
+  id: string; name: string; sex: 'hombre' | 'mujer'; ageDays: number; health: number;
+  hungerDays: number; coldDays: number; partnerId?: string; parents?: string[];
+  pregnancyDaysRemaining?: number; conceptionProgressDays?: number; childrenBorn?: number;
 }
-
-export interface BuildingInstance {
-  id: string;
-  level: number;
-  count: number;
+export interface PopulationState { residents: Resident[]; nextResidentId: number; births: number; reproductionEnabled: boolean; }
+export type AutomationMode = 'continuo' | 'mantener';
+export interface AutomationOrder {
+  id: string; recipeId: string; buildingId: string; mode: AutomationMode;
+  targetAmount: number; enabled: boolean; priority: number;
 }
-
-export interface ActiveActivity {
-  skillId: SkillId;
-  activityId: string;
-  startTime: number;
-  progressMs: number;
-  targetAmount?: number;
-  actionsDone: number;
-}
-
-export interface CraftQueueItem {
-  recipeId: string;
-  remaining: number;
-  progressMs: number;
-  startTime: number;
-}
-
 export interface GameState {
-  version: number;
-  lastSave: number;
-  lastTick: number;
-  resources: Record<ResourceId, number>;
-  maxStorage: number;
-  skills: Record<SkillId, SkillState>;
-  unlockedTechs: string[];
-  buildings: BuildingInstance[];
-  equippedTools: Record<string, string>;
-  ownedTools: string[];
-  activeActivity: ActiveActivity | null;
-  craftQueue: CraftQueueItem[];
-  completedObjectives: string[];
-  totalActions: Record<string, number>;
-  log: { time: number; message: string }[];
-  settings: {
-    offlineCapHours: number;
+  version: number; lastSave: number; lastTick: number; resources: Record<ResourceId, number>;
+  maxStorage: number; skills: Record<SkillId, SkillState>; unlockedTechs: string[];
+  buildings: BuildingInstance[]; equippedTools: Record<string, string>; ownedTools: string[];
+  activeActivity: ActiveActivity | null; craftQueue: CraftQueueItem[]; automationOrders: AutomationOrder[];
+  completedObjectives: string[]; totalActions: Record<string, number>; log: { time: number; message: string }[];
+  calendar: CalendarState; population: PopulationState; settings: { offlineCapHours: number };
+}
+export const SAVE_VERSION = 2;
+export const STORAGE_KEY = 'mundo-cero-save-v2';
+export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v1';
+export const ADULT_AGE_DAYS = 18 * 360;
+export const MAX_POPULATION = 30;
+
+export function createInitialPopulation(): PopulationState {
+  return {
+    residents: [
+      { id: 'resident-1', name: 'Aren', sex: 'hombre', ageDays: 25 * 360, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-2' },
+      { id: 'resident-2', name: 'Lira', sex: 'mujer', ageDays: 24 * 360, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-1', pregnancyDaysRemaining: 0, conceptionProgressDays: 0, childrenBorn: 0 },
+    ],
+    nextResidentId: 3, births: 0, reproductionEnabled: true,
   };
 }
-
-export const SAVE_VERSION = 1;
 
 export function createInitialState(): GameState {
   const resources = {} as Record<ResourceId, number>;
-  for (const r of Object.keys(RESOURCES) as ResourceId[]) {
-    resources[r] = 0;
-  }
-
+  for (const r of Object.keys(RESOURCES) as ResourceId[]) resources[r] = 0;
+  resources.bayas = 20;
   const skills = {} as Record<SkillId, SkillState>;
-  for (const s of Object.keys(SKILLS) as SkillId[]) {
-    skills[s] = { level: 1, xp: 0 };
-  }
-
+  for (const s of Object.keys(SKILLS) as SkillId[]) skills[s] = { level: 1, xp: 0 };
   return {
-    version: SAVE_VERSION,
-    lastSave: Date.now(),
-    lastTick: Date.now(),
-    resources,
-    maxStorage: 200,
-    skills,
-    unlockedTechs: [],
-    buildings: [],
-    equippedTools: {},
-    ownedTools: [],
-    activeActivity: null,
-    craftQueue: [],
-    completedObjectives: [],
-    totalActions: {},
-    log: [{ time: Date.now(), message: 'Despertás en un mundo de piedra y silencio. La civilización se ha perdido. Es hora de reconstruirla desde cero.' }],
-    settings: {
-      offlineCapHours: 8,
-    },
+    version: SAVE_VERSION, lastSave: Date.now(), lastTick: Date.now(), resources, maxStorage: 200,
+    skills, unlockedTechs: [], buildings: [], equippedTools: {}, ownedTools: [],
+    activeActivity: null, craftQueue: [], automationOrders: [], completedObjectives: [], totalActions: {},
+    log: [{ time: Date.now(), message: 'Despertás en un mundo de piedra y silencio. Aren y Lira son los primeros habitantes de este asentamiento. La civilización se ha perdido: es hora de reconstruirla.' }],
+    calendar: { totalDays: 0, dayProgressMs: 0 }, population: createInitialPopulation(),
+    settings: { offlineCapHours: 8 },
   };
 }
-
-export function getResource(state: GameState, id: ResourceId): number {
-  return state.resources[id] ?? 0;
-}
-
+export function getResource(state: GameState, id: ResourceId): number { return state.resources[id] ?? 0; }
 export function canAfford(state: GameState, costs: { resourceId: ResourceId; amount: number }[]): boolean {
-  return costs.every(c => getResource(state, c.resourceId) >= c.amount);
+  return costs.every(c => getResource(state, c.resourceId) + 1e-9 >= c.amount);
 }
-
 export function addResource(state: GameState, id: ResourceId, amount: number): void {
-  if (amount <= 0) return;
-  const current = state.resources[id] ?? 0;
-  const max = getMaxStorage(state);
-  state.resources[id] = Math.min(current + amount, max);
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  state.resources[id] = Math.min((state.resources[id] ?? 0) + amount, getMaxStorage(state));
 }
-
 export function removeResource(state: GameState, id: ResourceId, amount: number): boolean {
+  if (!Number.isFinite(amount) || amount < 0) return false;
   const current = state.resources[id] ?? 0;
-  if (current < amount) return false;
-  state.resources[id] = current - amount;
+  if (current + 1e-9 < amount) return false;
+  state.resources[id] = Math.max(0, current - amount);
   return true;
 }
-
 export function getMaxStorage(state: GameState, _id?: ResourceId): number {
-  let bonus = 0;
-  for (const b of state.buildings) {
-    const def = BUILDINGS[b.id];
-    if (def?.storageBonus) {
-      bonus += def.storageBonus * b.count * b.level;
-    }
-  }
-  return state.maxStorage + bonus;
+  return state.maxStorage + state.buildings.reduce((sum, b) => sum + (BUILDINGS[b.id]?.storageBonus ?? 0) * b.count * b.level, 0);
 }
-
 export function addXp(state: GameState, skillId: SkillId, amount: number): string[] {
   const messages: string[] = [];
   const skill = state.skills[skillId];
-  if (!skill) return messages;
+  if (!skill || !Number.isFinite(amount) || amount <= 0) return messages;
   skill.xp += amount;
   while (skill.level < 99 && skill.xp >= xpForLevel(skill.level)) {
-    skill.xp -= xpForLevel(skill.level);
-    skill.level += 1;
+    skill.xp -= xpForLevel(skill.level); skill.level += 1;
     messages.push(`${SKILLS[skillId].name} ha subido al nivel ${skill.level}.`);
   }
   return messages;
 }
-
-export function isTechUnlocked(state: GameState, techId: string): boolean {
-  return state.unlockedTechs.includes(techId);
-}
-
+export function isTechUnlocked(state: GameState, techId: string): boolean { return state.unlockedTechs.includes(techId); }
 export function hasBuilding(state: GameState, buildingId: string, minCount = 1): boolean {
-  const b = state.buildings.find(x => x.id === buildingId);
-  return !!b && b.count >= minCount;
+  const b = state.buildings.find(x => x.id === buildingId); return !!b && b.count >= minCount;
 }
-
-export function getEquippedTool(state: GameState, category: string): string | null {
-  return state.equippedTools[category] || null;
-}
-
+export function getEquippedTool(state: GameState, category: string): string | null { return state.equippedTools[category] || null; }
 export function getToolBonuses(state: GameState, category: string) {
   const toolId = getEquippedTool(state, category);
-  if (!toolId || !TOOLS[toolId]) return { speedMult: 1, yieldMult: 1 };
-  return TOOLS[toolId].bonuses;
+  if (!toolId || !TOOLS[toolId]) return { speedMult: 1, yieldMult: 1, specialChance: 0 };
+  return { speedMult: TOOLS[toolId].bonuses.speedMult ?? 1, yieldMult: TOOLS[toolId].bonuses.yieldMult ?? 1, specialChance: TOOLS[toolId].bonuses.specialChance ?? 0 };
 }
-
+export function getAssignedWorkers(state: GameState): number {
+  return state.buildings.reduce((sum, b) => sum + Math.max(0, b.workersAssigned || 0), 0);
+}
+export function getAvailableWorkers(state: GameState): number {
+  const adults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
+  return Math.max(0, adults - getAssignedWorkers(state));
+}
 export function calculatePassiveProduction(state: GameState, deltaMs: number): Record<ResourceId, number> {
   const produced: Partial<Record<ResourceId, number>> = {};
-  const minutes = deltaMs / 60000;
-
+  const minutes = Math.max(0, deltaMs) / 60000;
+  const season = getCalendarInfo(state.calendar).season;
+  const populationHealth = state.population.residents.length
+    ? state.population.residents.reduce((sum, r) => sum + r.health, 0) / (state.population.residents.length * 100)
+    : 0;
+  const healthFactor = 0.5 + Math.max(0, Math.min(1, populationHealth)) * 0.5;
   for (const b of state.buildings) {
     const def = BUILDINGS[b.id];
-    if (!def?.production) continue;
+    if (!def?.production || b.count <= 0) continue;
     const levelMult = 1 + (b.level - 1) * 0.35;
+    const requiredWorkers = (def.workersRequired ?? 1) * b.count;
+    const workerRatio = requiredWorkers > 0 ? Math.min(1, (b.workersAssigned || 0) / requiredWorkers) : 1;
     for (const prod of def.production) {
-      const amount = prod.amountPerMinute * b.count * levelMult * minutes;
+      const seasonal = seasonMultiplier(season, prod.seasonMultipliers);
+      const amount = prod.amountPerMinute * b.count * levelMult * workerRatio * healthFactor * seasonal * minutes;
       produced[prod.resourceId] = (produced[prod.resourceId] || 0) + amount;
     }
   }
   return produced as Record<ResourceId, number>;
 }
-
 export function addLog(state: GameState, message: string): void {
   state.log.unshift({ time: Date.now(), message });
-  if (state.log.length > 50) state.log.length = 50;
+  if (state.log.length > 80) state.log.length = 80;
 }
-
-// Branch update check
