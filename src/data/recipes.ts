@@ -21,7 +21,6 @@ export const RECIPES: Record<string, RecipeDef> = {
     id: 'cuerda',
     name: 'Cuerda',
     description: 'Trenzar fibras para crear cuerda resistente.',
-    requiredBuilding: 'taller',
     skillId: 'artesania',
     requiredLevel: 1,
     durationMs: 4000,
