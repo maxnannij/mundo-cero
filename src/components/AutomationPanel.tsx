@@ -23,6 +23,7 @@ export function AutomationPanel() {
     r.outputs.some(o => o.resourceId !== 'tool') &&
     (r.requiredBuilding || 'taller') === selectedFacility,
   );
+  const activeRecipeId = availableRecipes.some(r => r.id === recipeId) ? recipeId : (availableRecipes[0]?.id || '');
 
   return (
     <div className="panel automation-panel">
