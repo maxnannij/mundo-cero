@@ -11,7 +11,7 @@ import { BUILDINGS } from '../data/buildings';
 import { TECHS } from '../data/techs';
 import { OBJECTIVES } from '../data/objectives';
 import { TOOLS } from '../data/tools';
-import { GAME_DAY_MS, getCalendarInfo, type SeasonId } from '../data/calendar';
+import { GAME_DAY_MS, DAYS_PER_YEAR, getCalendarInfo, type SeasonId } from '../data/calendar';
 import type { ResourceId } from '../data/resources';
 
 const MAX_SIMULATION_MS = 8 * 60 * 60 * 1000;
@@ -466,7 +466,7 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
 
   if (!state.population.reproductionEnabled || state.population.residents.length >= MAX_POPULATION || !hasBuilding(state, 'refugio') || !fed || !warm) return;
   const mothers = state.population.residents.filter(r =>
-    r.sex === 'mujer' && r.ageDays >= ADULT_AGE_DAYS && r.ageDays <= 40 * 360 &&
+    r.sex === 'mujer' && r.ageDays >= ADULT_AGE_DAYS && r.ageDays <= 40 * DAYS_PER_YEAR &&
     r.health >= 70
   );
   for (const mother of mothers) {
