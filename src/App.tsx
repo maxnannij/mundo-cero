@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { GameProvider } from './store/GameContext';
+import { GameProvider, useGame } from './store/GameContext';
 import { Header } from './components/Header';
 import { Nav } from './components/Nav';
 import { HomePanel } from './components/HomePanel';
@@ -16,6 +16,8 @@ import './App.css';
 
 function GameApp() {
   const [tab, setTab] = useState('inicio');
+  const { state, doRestart } = useGame();
+  const gameOver = state.population.residents.length === 0;
 
   return (
     <div className="app">
@@ -33,6 +35,23 @@ function GameApp() {
         {tab === 'objetivos' && <ObjectivesPanel />}
         {tab === 'ajustes' && <SettingsPanel />}
       </main>
+      {gameOver && (
+        <div className="gameover-backdrop" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
+          <div className="gameover-panel">
+            <div className="gameover-mark">MUNDO CERO</div>
+            <p className="gameover-kicker">FIN DE LA CIVILIZACIÓN</p>
+            <h2 id="gameover-title">GAME OVER</h2>
+            <p className="gameover-message">
+              El último habitante ha desaparecido. Ya no queda nadie para continuar la reconstrucción.
+            </p>
+            <div className="gameover-divider" />
+            <p className="gameover-prompt">Pero la historia puede comenzar otra vez.</p>
+            <button className="gameover-restart" onClick={doRestart}>
+              ↻ Comenzar una nueva partida
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
