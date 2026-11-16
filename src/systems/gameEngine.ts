@@ -117,7 +117,7 @@ function normalizeSave(value: unknown): GameState | null {
     equippedTools: isRecord(raw.equippedTools) ? raw.equippedTools as Record<string, string> : {},
     ownedTools: Array.isArray(raw.ownedTools) ? [...new Set(raw.ownedTools.filter(x => typeof x === 'string' && !!TOOLS[x]))] : [],
     toolInventory: isRecord(raw.toolInventory)
-      ? Object.fromEntries(Object.entries(raw.toolInventory).filter(([id, count]) => !!TOOLS[id] && Number.isFinite(count) && Number(count) > 0).map(([id, count]) => [id, Math.floor(Number(count))]))
+      ? Object.fromEntries(Object.entries(raw.toolInventory).filter(([id, count]) => !!TOOLS[id] && typeof count === 'number' && Number.isFinite(count) && count > 0).map(([id, count]) => [id, Math.floor(Number(count))]))
       : Object.fromEntries((Array.isArray(raw.ownedTools) ? raw.ownedTools : []).filter((id): id is string => typeof id === 'string' && !!TOOLS[id]).map(id => [id, 1])),
     activeActivities,
     craftQueue: Array.isArray(raw.craftQueue) ? raw.craftQueue.filter(x => x && typeof x.recipeId === 'string' && !!RECIPES[x.recipeId]).map(x => ({
@@ -346,7 +346,6 @@ function canUseRecipe(state: GameState, recipe: RecipeDef): boolean {
 
 function queueCraftInternal(state: GameState, recipe: RecipeDef, quantity: number, automationOrderId?: string): boolean {
   if (!canUseRecipe(state, recipe)) return false;
-  const outputsTool = recipe.outputs.some(o => o.resourceId === 'tool' && o.toolId);
   const qty = Math.max(1, Math.min(50, Math.floor(quantity)));
   let affordable = 0;
   for (; affordable < qty; affordable++) {
