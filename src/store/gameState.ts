@@ -6,7 +6,7 @@ import { getCalendarInfo, DAYS_PER_YEAR, type CalendarState, seasonMultiplier } 
 
 export interface SkillState { level: number; xp: number; masteryLevel: number; masteryXp: number; specialization?: 'velocidad' | 'rendimiento'; }
 export interface BuildingInstance { id: string; level: number; count: number; workersAssigned: number; }
-export interface ActiveActivity { skillId: SkillId; activityId: string; startTime: number; progressMs: number; targetAmount?: number; actionsDone: number; }
+export interface ActiveActivity { id: string; skillId: SkillId; activityId: string; startTime: number; progressMs: number; targetAmount?: number; actionsDone: number; }
 export interface CraftQueueItem { recipeId: string; remaining: number; progressMs: number; startTime: number; automationOrderId?: string; }
 export interface Resident {
   id: string; name: string; sex: 'hombre' | 'mujer'; ageDays: number; health: number;
@@ -24,13 +24,14 @@ export interface GameState {
   version: number; lastSave: number; lastTick: number; resources: Record<ResourceId, number>;
   maxStorage: number; skills: Record<SkillId, SkillState>; unlockedTechs: string[];
   buildings: BuildingInstance[]; equippedTools: Record<string, string>; ownedTools: string[];
-  activeActivity: ActiveActivity | null; craftQueue: CraftQueueItem[]; automationOrders: AutomationOrder[];
+  activeActivities: ActiveActivity[]; craftQueue: CraftQueueItem[]; automationOrders: AutomationOrder[];
   completedObjectives: string[]; totalActions: Record<string, number>; log: { time: number; message: string }[];
   calendar: CalendarState; population: PopulationState; settings: { offlineCapHours: number };
 }
-export const SAVE_VERSION = 3;
-export const STORAGE_KEY = 'mundo-cero-save-v3';
-export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v2';
+export const SAVE_VERSION = 4;
+export const STORAGE_KEY = 'mundo-cero-save-v4';
+export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v3';
+export const PREVIOUS_STORAGE_KEY = 'mundo-cero-save-v2';
 export const OLDEST_STORAGE_KEY = 'mundo-cero-save-v1';
 export const ADULT_AGE_DAYS = 18 * DAYS_PER_YEAR;
 export const MAX_POPULATION = 30;
@@ -54,13 +55,13 @@ export function createInitialPopulation(): PopulationState {
 export function createInitialState(): GameState {
   const resources = {} as Record<ResourceId, number>;
   for (const r of Object.keys(RESOURCES) as ResourceId[]) resources[r] = 0;
-  resources.bayas = 20;
+  resources.bayas = 40;
   const skills = {} as Record<SkillId, SkillState>;
   for (const s of Object.keys(SKILLS) as SkillId[]) skills[s] = { level: 1, xp: 0, masteryLevel: 0, masteryXp: 0 };
   return {
     version: SAVE_VERSION, lastSave: Date.now(), lastTick: Date.now(), resources, maxStorage: 200,
     skills, unlockedTechs: [], buildings: [], equippedTools: {}, ownedTools: [],
-    activeActivity: null, craftQueue: [], automationOrders: [], completedObjectives: [], totalActions: {},
+    activeActivities: [], craftQueue: [], automationOrders: [], completedObjectives: [], totalActions: {},
     log: [{ time: Date.now(), message: 'Despertás en un mundo de piedra y silencio. Aren y Lira son los primeros habitantes de este asentamiento. La civilización se ha perdido: es hora de reconstruirla.' }],
     calendar: { totalDays: 0, dayProgressMs: 0 }, population: createInitialPopulation(),
     settings: { offlineCapHours: 8 },
@@ -133,8 +134,7 @@ export function getAssignedWorkers(state: GameState): number {
 }
 export function getAvailableWorkers(state: GameState): number {
   const adults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
-  const activityWorkers = state.activeActivity ? 1 : 0;
-  return Math.max(0, adults - getAssignedWorkers(state) - activityWorkers);
+  return Math.max(0, adults - getAssignedWorkers(state) - state.activeActivities.length);
 }
 export function calculatePassiveProduction(state: GameState, deltaMs: number): Record<ResourceId, number> {
   const produced: Partial<Record<ResourceId, number>> = {};

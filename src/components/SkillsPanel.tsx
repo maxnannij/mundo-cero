@@ -16,7 +16,7 @@ export function SkillsPanel() {
   const xpNeeded = xpForLevel(skillState.level);
   const xpPct = Math.min(100, (skillState.xp / xpNeeded) * 100);
   const availableSkills = SKILL_LIST.filter(s => s.id !== 'metalurgia' || isTechUnlocked(state, 'metalurgia_basica'));
-  const active = state.activeActivity;
+  const activeActivities = state.activeActivities;
   const availableWorkers = getAvailableWorkers(state);
   const season = getCalendarInfo(state.calendar).season;
 
@@ -91,7 +91,7 @@ export function SkillsPanel() {
 
         <h3>Actividades · {season}</h3>
         <p className={availableWorkers > 0 ? 'good-text' : 'warning-text'}>
-          Trabajadores libres: {availableWorkers}{active ? ' · 1 trabajador ocupado en la actividad actual' : ''}
+          Trabajadores libres: {availableWorkers} · Tareas manuales en curso: {activeActivities.length}
         </p>
         <div className="activities">
           {skill.activities.map(act => {
@@ -101,7 +101,8 @@ export function SkillsPanel() {
             const seasonReady = !act.seasonsAvailable || act.seasonsAvailable.includes(season);
             const materialsReady = !act.inputs || act.inputs.every(i => (state.resources[i.resourceId] || 0) >= i.amount);
             const unlocked = levelReady && techReady && buildingReady && seasonReady;
-            const isActive = active?.skillId === selectedSkill && active?.activityId === act.id;
+            const activeTasksForActivity = activeActivities.filter(task => task.skillId === selectedSkill && task.activityId === act.id);
+            const isActive = activeTasksForActivity.length > 0;
             const lockMessage = !levelReady ? 'Requiere nivel ' + act.requiredLevel
               : !techReady ? 'Requiere tecnología: ' + act.unlockTech
               : !buildingReady ? 'Requiere instalación: ' + act.requiredBuilding
@@ -130,19 +131,15 @@ export function SkillsPanel() {
                   <div className="locked-msg">{lockMessage}</div>
                 ) : (
                   <div className="act-actions">
-                    {isActive ? (
-                      <button className="btn danger" onClick={stopAct}>Detener</button>
-                    ) : (
-                      <>
-                        <button className="btn primary" disabled={!materialsReady || !!active || availableWorkers < 1} onClick={() => startAct(selectedSkill, act.id)}>Iniciar</button>
-                        <input type="number" placeholder="Acciones" min={1} value={target}
-                          onChange={e => setTarget(e.target.value)} className="target-input" />
-                        <button className="btn" disabled={!materialsReady || !!active || availableWorkers < 1 || !Number.isFinite(Number(target)) || Number(target) < 1}
-                          onClick={() => startAct(selectedSkill, act.id, Number(target))}>Hasta X acciones</button>
-                      </>
-                    )}
-                    {!active && availableWorkers < 1 && <small className="warning-text">No hay trabajadores libres. Liberá uno de una instalación para iniciar esta tarea.</small>}
-                    {active && !isActive && <small className="warning-text">Ya hay otra actividad en curso. Detenela para iniciar esta tarea.</small>}
+                    <button className="btn primary" disabled={!materialsReady || availableWorkers < 1} onClick={() => startAct(selectedSkill, act.id)}>
+                      {isActive ? 'Asignar otro trabajador' : 'Iniciar'}
+                    </button>
+                    <input type="number" placeholder="Acciones" min={1} value={target}
+                      onChange={e => setTarget(e.target.value)} className="target-input" />
+                    <button className="btn" disabled={!materialsReady || availableWorkers < 1 || !Number.isFinite(Number(target)) || Number(target) < 1}
+                      onClick={() => startAct(selectedSkill, act.id, Number(target))}>Hasta X acciones</button>
+                    {isActive && <small className="good-text">En curso: {activeTasksForActivity.length} trabajador(es) · podés sumar otro.</small>}
+                    {availableWorkers < 1 && <small className="warning-text">No hay trabajadores libres. Liberá uno de una instalación o detené una tarea.</small>}
                   </div>
                 )}
               </div>
@@ -151,13 +148,25 @@ export function SkillsPanel() {
           {skill.activities.length === 0 && <p className="empty">Esta habilidad se utiliza principalmente mediante fabricación o construcción.</p>}
         </div>
 
-        {active && active.skillId === selectedSkill && (
+        {activeActivities.length > 0 && (
           <div className="active-status">
-            <h4>Actividad en curso</h4>
-            <p>{SKILLS[active.skillId].activities.find(a => a.id === active.activityId)?.name} · Acciones: {active.actionsDone}{active.targetAmount ? ' / ' + active.targetAmount : ''}</p>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: Math.min(100, active.progressMs / (SKILLS[active.skillId].activities.find(a => a.id === active.activityId)?.durationMs || 1) * 100) + '%' }} />
-            </div>
+            <h4>Tareas en curso</h4>
+            {activeActivities.map(active => {
+              const activeDef = SKILLS[active.skillId]?.activities.find(a => a.id === active.activityId);
+              const duration = activeDef?.durationMs || 1;
+              return (
+                <div key={active.id} className="active-task-row">
+                  <p>
+                    <strong>{SKILLS[active.skillId]?.name}: {activeDef?.name || active.activityId}</strong>
+                    {' · Acciones: '}{active.actionsDone}{active.targetAmount ? ` / ${active.targetAmount}` : ''}
+                    <button className="btn danger" onClick={() => stopAct(active.id)}>Detener</button>
+                  </p>
+                  <div className="progress-bar">
+                    <div className="progress-fill" style={{ width: Math.min(100, active.progressMs / duration * 100) + '%' }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

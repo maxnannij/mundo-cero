@@ -1,9 +1,9 @@
 import {
-  type GameState, type AutomationOrder, type AutomationMode, type Resident,
+  type GameState, type ActiveActivity, type AutomationOrder, type AutomationMode, type Resident,
   createInitialState, addResource, removeResource, addXp, addLog,
   getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
   getAvailableWorkers, getAssignedWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
-  OLDEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
+  PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
 import { RECIPES, type RecipeDef } from '../data/recipes';
@@ -15,8 +15,9 @@ import { GAME_DAY_MS, DAYS_PER_YEAR, getCalendarInfo, type SeasonId } from '../d
 import type { ResourceId } from '../data/resources';
 
 const MAX_SIMULATION_MS = 8 * 60 * 60 * 1000;
-const FOOD_PER_ADULT_DAY = 0.6;
-const FOOD_PER_CHILD_DAY = 0.35;
+const BERRIES_PER_PERSON_DAY = 20;
+const COOKED_FOOD_PER_PERSON_DAY = 3;
+const BERRY_EQUIVALENT_PER_COOKED_FOOD = BERRIES_PER_PERSON_DAY / COOKED_FOOD_PER_PERSON_DAY;
 const PREGNANCY_DAYS = 280;
 const CONCEPTION_DAYS = 45;
 
@@ -27,7 +28,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function normalizeSave(value: unknown): GameState | null {
   if (!isRecord(value) || !isRecord(value.resources) || !isRecord(value.skills)) return null;
   const initial = createInitialState();
-  const raw = value as Partial<GameState>;
+  const raw = value as Partial<GameState> & { activeActivity?: ActiveActivity | null };
   const resources = { ...initial.resources };
   for (const id of Object.keys(resources) as ResourceId[]) {
     const amount = raw.resources?.[id];
@@ -83,6 +84,24 @@ function normalizeSave(value: unknown): GameState | null {
       }
     : initial.calendar;
 
+  const savedActivities: Partial<ActiveActivity>[] = Array.isArray(raw.activeActivities)
+    ? raw.activeActivities
+    : raw.activeActivity ? [raw.activeActivity] : [];
+  const activeActivities: ActiveActivity[] = savedActivities
+    .filter(activity => !!activity && typeof activity.skillId === 'string'
+      && !!SKILLS[activity.skillId as SkillId]?.activities.some(def => def.id === activity.activityId))
+    .map((activity, index) => ({
+      id: typeof activity.id === 'string' && activity.id
+        ? activity.id : `activity-${index}-${Number(activity.startTime) || Date.now()}`,
+      skillId: activity.skillId as SkillId,
+      activityId: activity.activityId as string,
+      startTime: Number(activity.startTime) || Date.now(),
+      progressMs: Math.max(0, Number(activity.progressMs) || 0),
+      targetAmount: Number.isFinite(Number(activity.targetAmount)) && Number(activity.targetAmount) > 0
+        ? Math.max(1, Math.floor(Number(activity.targetAmount))) : undefined,
+      actionsDone: Math.max(0, Math.floor(Number(activity.actionsDone) || 0)),
+    }));
+
   const normalized: GameState = {
     ...initial, ...raw, version: SAVE_VERSION,
     lastSave: Number(raw.lastSave) || Date.now(),
@@ -91,7 +110,7 @@ function normalizeSave(value: unknown): GameState | null {
     unlockedTechs: Array.isArray(raw.unlockedTechs) ? raw.unlockedTechs.filter(x => typeof x === 'string' && !!TECHS[x]) : [],
     equippedTools: isRecord(raw.equippedTools) ? raw.equippedTools as Record<string, string> : {},
     ownedTools: Array.isArray(raw.ownedTools) ? raw.ownedTools.filter(x => typeof x === 'string' && !!TOOLS[x]) : [],
-    activeActivity: raw.activeActivity && typeof raw.activeActivity.activityId === 'string' ? raw.activeActivity : null,
+    activeActivities,
     craftQueue: Array.isArray(raw.craftQueue) ? raw.craftQueue.filter(x => x && typeof x.recipeId === 'string' && !!RECIPES[x.recipeId]).map(x => ({
       recipeId: x.recipeId, remaining: Math.max(1, Math.floor(Number(x.remaining) || 1)),
       progressMs: Math.max(0, Number(x.progressMs) || 0), startTime: Number(x.startTime) || Date.now(),
@@ -109,18 +128,18 @@ function normalizeSave(value: unknown): GameState | null {
 
   // Drop staffing assignments that exceed the current adult workforce.
   const livingAdults = population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
-  if (normalized.activeActivity && livingAdults < 1) normalized.activeActivity = null;
-  let staffRemaining = Math.max(0, livingAdults - (normalized.activeActivity ? 1 : 0));
+  let staffRemaining = livingAdults;
   for (const b of normalized.buildings) {
     b.workersAssigned = Math.min(b.workersAssigned, staffRemaining, (BUILDINGS[b.id]?.workersRequired ?? 1) * b.count);
     staffRemaining -= b.workersAssigned;
   }
+  normalized.activeActivities = normalized.activeActivities.slice(0, Math.max(0, livingAdults - getAssignedWorkers(normalized)));
   return normalized;
 }
 
 export function loadGame(): GameState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
     if (!raw) return createInitialState();
     const parsed = normalizeSave(JSON.parse(raw) as unknown);
     if (!parsed) throw new Error('La partida guardada no tiene una estructura válida.');
@@ -128,7 +147,7 @@ export function loadGame(): GameState {
   } catch (error) {
     console.error('No se pudo cargar la partida guardada.', error);
     try {
-      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
       if (raw) localStorage.setItem(`mundo-cero-backup-corrupto-${Date.now()}`, raw);
     } catch { /* Storage may be unavailable or full. */ }
     return createInitialState();
@@ -194,7 +213,7 @@ function isSeasonAvailable(activity: ActivityDef, season: SeasonId): boolean {
 
 export function startActivity(state: GameState, skillId: SkillId, activityId: string, targetAmount?: number): boolean {
   const act = getActivity(skillId, activityId);
-  if (!act || !state.skills[skillId] || state.activeActivity) return false;
+  if (!act || !state.skills[skillId]) return false;
   if (getAvailableWorkers(state) < 1) return false;
   if (state.skills[skillId].level < act.requiredLevel) return false;
   if (act.unlockTech && !isTechUnlocked(state, act.unlockTech)) return false;
@@ -202,36 +221,36 @@ export function startActivity(state: GameState, skillId: SkillId, activityId: st
   if (!isSeasonAvailable(act, getCalendarInfo(state.calendar).season)) return false;
   if (targetAmount !== undefined && (!Number.isFinite(targetAmount) || targetAmount < 1)) return false;
 
-  state.activeActivity = {
+  const task: ActiveActivity = {
+    id: `activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     skillId, activityId, startTime: Date.now(), progressMs: 0,
     targetAmount: targetAmount ? Math.floor(targetAmount) : undefined, actionsDone: 0,
   };
-  addLog(state, `Comenzaste: ${act.name}`);
+  state.activeActivities.push(task);
+  addLog(state, `Comenzaste: ${act.name}. Tareas manuales activas: ${state.activeActivities.length}.`);
   return true;
 }
 
-export function stopActivity(state: GameState): void {
-  if (state.activeActivity) {
-    addLog(state, 'Actividad detenida.');
-    state.activeActivity = null;
-  }
+export function stopActivity(state: GameState, activityInstanceId: string): void {
+  const task = state.activeActivities.find(activity => activity.id === activityInstanceId);
+  if (!task) return;
+  const act = getActivity(task.skillId, task.activityId);
+  state.activeActivities = state.activeActivities.filter(activity => activity.id !== activityInstanceId);
+  addLog(state, `Actividad detenida: ${act?.name || task.activityId}. El trabajador quedó libre.`);
 }
 
-function completeActivityAction(state: GameState, act: ActivityDef): boolean {
+function completeActivityAction(state: GameState, act: ActivityDef, active: ActiveActivity): boolean {
   const season = getCalendarInfo(state.calendar).season;
   if (!isSeasonAvailable(act, season)) {
-    addLog(state, `${act.name} no está disponible durante el invierno/esta estación.`);
-    state.activeActivity = null;
+    addLog(state, `${act.name} no está disponible durante ${season}.`);
     return false;
   }
   if (act.requiredBuilding && !hasBuilding(state, act.requiredBuilding)) {
     addLog(state, `Necesitás construir ${BUILDINGS[act.requiredBuilding]?.name || act.requiredBuilding} para continuar.`);
-    state.activeActivity = null;
     return false;
   }
   if (act.inputs?.length && !canAfford(state, act.inputs)) {
     addLog(state, `Faltan materiales para continuar: ${act.inputs.map(i => `${i.amount} ${i.resourceId}`).join(', ')}.`);
-    state.activeActivity = null;
     return false;
   }
   for (const input of act.inputs ?? []) removeResource(state, input.resourceId, input.amount);
@@ -249,10 +268,8 @@ function completeActivityAction(state: GameState, act: ActivityDef): boolean {
   }
   for (const message of addXp(state, act.skillId, act.xp)) addLog(state, message);
   for (const message of addMasteryXp(state, act.skillId, act.xp)) addLog(state, message);
-  if (state.activeActivity) {
-    state.activeActivity.actionsDone += 1;
-    state.totalActions[act.id] = (state.totalActions[act.id] || 0) + 1;
-  }
+  active.actionsDone += 1;
+  state.totalActions[act.id] = (state.totalActions[act.id] || 0) + 1;
   checkObjectives(state);
   return true;
 }
@@ -377,44 +394,53 @@ function processContinuousSystems(state: GameState, deltaMs: number): void {
   const passive = calculatePassiveProduction(state, deltaMs);
   for (const [id, amount] of Object.entries(passive)) addResource(state, id as ResourceId, amount);
 
-  if (state.activeActivity) {
-    const active = state.activeActivity;
+  for (const snapshot of [...state.activeActivities]) {
+    let active = state.activeActivities.find(task => task.id === snapshot.id);
+    if (!active) continue;
     const act = getActivity(active.skillId, active.activityId);
-    if (!act) state.activeActivity = null;
-    else {
-      const toolSpeed = getToolBonuses(state, act.requiredTool || 'ninguna').speedMult || 1;
-      const skillSpeed = getSkillBonuses(state, act.skillId).speedMult;
-      const duration = Math.max(100, act.durationMs * toolSpeed * skillSpeed);
-      active.progressMs += deltaMs;
-      let actions = 0;
-      while (state.activeActivity && state.activeActivity.progressMs >= duration && actions++ < 20_000) {
-        if (!completeActivityAction(state, act)) break;
-        const current = state.activeActivity;
-        if (!current) break;
-        current.progressMs -= duration;
-        if (current.targetAmount && current.actionsDone >= current.targetAmount) {
-          addLog(state, `Objetivo alcanzado (${current.targetAmount} acciones). Actividad detenida.`);
-          state.activeActivity = null;
-          break;
-        }
+    if (!act) {
+      state.activeActivities = state.activeActivities.filter(task => task.id !== snapshot.id);
+      continue;
+    }
+    const toolSpeed = getToolBonuses(state, act.requiredTool || 'ninguna').speedMult || 1;
+    const skillSpeed = getSkillBonuses(state, act.skillId).speedMult;
+    const duration = Math.max(100, act.durationMs * toolSpeed * skillSpeed);
+    active.progressMs += deltaMs;
+    let actions = 0;
+    while (actions++ < 20_000) {
+      active = state.activeActivities.find(task => task.id === snapshot.id);
+      if (!active || active.progressMs < duration) break;
+      if (!completeActivityAction(state, act, active)) {
+        state.activeActivities = state.activeActivities.filter(task => task.id !== snapshot.id);
+        break;
+      }
+      active = state.activeActivities.find(task => task.id === snapshot.id);
+      if (!active) break;
+      active.progressMs -= duration;
+      if (active.targetAmount && active.actionsDone >= active.targetAmount) {
+        addLog(state, `Objetivo alcanzado para ${act.name} (${active.targetAmount} acciones). El trabajador quedó libre.`);
+        state.activeActivities = state.activeActivities.filter(task => task.id !== snapshot.id);
+        break;
       }
     }
   }
-
   processCrafting(state, deltaMs);
   processAutomations(state);
 }
 
 function consumeDailyFood(state: GameState): boolean {
-  const residents = state.population.residents;
-  const needed = residents.reduce((sum, r) => sum + (r.ageDays >= ADULT_AGE_DAYS ? FOOD_PER_ADULT_DAY : FOOD_PER_CHILD_DAY), 0);
-  if (needed <= 0) return true;
-  const cookedRations = Math.min(needed, (state.resources.comida_cocida || 0) * 2);
-  if (cookedRations > 0) removeResource(state, 'comida_cocida', cookedRations / 2);
-  const remaining = Math.max(0, needed - cookedRations);
-  const berriesUsed = Math.min(remaining, state.resources.bayas || 0);
+  const people = state.population.residents.length;
+  if (people === 0) return true;
+  // 3 unidades de comida cocida equivalen a 20 bayas por persona.
+  // Primero se consumen las comidas cocidas; las bayas completan la ración.
+  const neededBerryEquivalent = people * BERRIES_PER_PERSON_DAY;
+  const cookedUsed = Math.min(Math.max(0, state.resources.comida_cocida || 0), people * COOKED_FOOD_PER_PERSON_DAY);
+  if (cookedUsed > 0) removeResource(state, 'comida_cocida', cookedUsed);
+  const berryEquivalentCovered = cookedUsed * BERRY_EQUIVALENT_PER_COOKED_FOOD;
+  const berriesNeeded = Math.max(0, neededBerryEquivalent - berryEquivalentCovered);
+  const berriesUsed = Math.min(berriesNeeded, Math.max(0, state.resources.bayas || 0));
   if (berriesUsed > 0) removeResource(state, 'bayas', berriesUsed);
-  return remaining - berriesUsed <= 1e-6;
+  return berriesNeeded - berriesUsed <= 1e-6;
 }
 
 function consumeDailyHeating(state: GameState, season: SeasonId): boolean {
@@ -519,11 +545,16 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
 
     // Ajustar la fuerza de trabajo cuando alguien fallece.
     const livingAdults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
-    if (state.activeActivity && livingAdults <= getAssignedWorkers(state)) {
-      addLog(state, 'La actividad se detuvo porque ya no queda un trabajador libre.');
-      state.activeActivity = null;
+    const maxActiveTasks = Math.max(0, livingAdults - getAssignedWorkers(state));
+    if (state.activeActivities.length > maxActiveTasks) {
+      const stopped = state.activeActivities.slice(maxActiveTasks);
+      for (const task of stopped) {
+        const act = getActivity(task.skillId, task.activityId);
+        addLog(state, `Se detuvo ${act?.name || task.activityId} porque ya no hay suficientes trabajadores.`);
+      }
+      state.activeActivities = state.activeActivities.slice(0, maxActiveTasks);
     }
-    let remainingStaff = livingAdults;
+    let remainingStaff = Math.max(0, livingAdults - state.activeActivities.length);
     for (const building of state.buildings) {
       const previousStaff = building.workersAssigned;
       building.workersAssigned = Math.min(previousStaff, remainingStaff);
@@ -571,11 +602,11 @@ function processDailySystems(state: GameState, previousSeason: SeasonId): void {
     if (info.season === 'invierno') addLog(state, 'El invierno llegó: las bayas silvestres dejan de crecer y la población necesita leña para calentarse.');
   }
   processDailyPopulation(state, info.season);
-  if (state.activeActivity) {
-    const act = getActivity(state.activeActivity.skillId, state.activeActivity.activityId);
+  for (const task of [...state.activeActivities]) {
+    const act = getActivity(task.skillId, task.activityId);
     if (act && !isSeasonAvailable(act, info.season)) {
-      addLog(state, `${act.name} se detuvo: no está disponible durante ${info.season}.`);
-      state.activeActivity = null;
+      addLog(state, `${act.name} se detuvo: no está disponible durante ${info.season}. El trabajador quedó libre.`);
+      state.activeActivities = state.activeActivities.filter(item => item.id !== task.id);
     }
   }
 }
@@ -708,6 +739,7 @@ function checkObjectives(state: GameState): void {
 export function resetGame(): GameState {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
+  localStorage.removeItem(PREVIOUS_STORAGE_KEY);
   localStorage.removeItem(OLDEST_STORAGE_KEY);
   return createInitialState();
 }

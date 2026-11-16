@@ -36,8 +36,8 @@ export function Header() {
         })}
       </div>
       <div className="header-right">
-        {state.activeActivity ? (
-          <span className="status active">● En actividad</span>
+        {state.activeActivities.length > 0 ? (
+          <span className="status active">● {state.activeActivities.length} tarea(s)</span>
         ) : (
           <span className="status idle">○ Idle</span>
         )}
