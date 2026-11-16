@@ -5,7 +5,7 @@ import { getCalendarInfo } from '../data/calendar';
 
 export function HomePanel() {
   const { state, stopAct } = useGame();
-  const active = state.activeActivity;
+  const activeActivities = state.activeActivities;
   const calendar = getCalendarInfo(state.calendar);
 
   return (
@@ -24,16 +24,21 @@ export function HomePanel() {
       <div className="home-grid">
         <div className="home-card">
           <h3>Estado actual</h3>
-          {active ? (
+          {activeActivities.length > 0 ? (
             <div>
-              <p>
-                Realizando: <strong>{SKILLS[active.skillId]?.activities.find(a => a.id === active.activityId)?.name}</strong>
-              </p>
-              <p>Acciones completadas: {active.actionsDone}{active.targetAmount ? ` / ${active.targetAmount}` : ''}</p>
-              <button className="btn danger" onClick={stopAct}>Detener actividad</button>
+              <p>{activeActivities.length} tarea(s) manual(es) en curso · cada una ocupa un trabajador.</p>
+              {activeActivities.map(active => (
+                <div key={active.id} className="active-task-row">
+                  <p>
+                    <strong>{SKILLS[active.skillId]?.name}: {SKILLS[active.skillId]?.activities.find(a => a.id === active.activityId)?.name}</strong>
+                    {' · Acciones: '}{active.actionsDone}{active.targetAmount ? ` / ${active.targetAmount}` : ''}
+                  </p>
+                  <button className="btn danger" onClick={() => stopAct(active.id)}>Detener esta tarea</button>
+                </div>
+              ))}
             </div>
           ) : (
-            <p>Ninguna actividad manual en curso. Elegí una en Habilidades.</p>
+            <p>No hay tareas manuales en curso. Elegí actividades en Habilidades.</p>
           )}
         </div>
 
