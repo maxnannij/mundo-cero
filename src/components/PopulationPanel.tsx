@@ -11,8 +11,8 @@ export function PopulationPanel() {
   const residents = state.population.residents;
   const adults = residents.filter(r => r.ageDays >= ADULT_AGE_DAYS).length;
   const children = residents.length - adults;
-  const dailyFood = adults * 0.6 + children * 0.35;
-  const foodStored = (state.resources.bayas || 0) + (state.resources.comida_cocida || 0) * 2;
+  const dailyFood = residents.length * 20;
+  const foodStored = (state.resources.bayas || 0) + (state.resources.comida_cocida || 0) * (20 / 3);
   const foodDays = dailyFood > 0 ? foodStored / dailyFood : 0;
   const totalWorkers = getAssignedWorkers(state);
   const available = getAvailableWorkers(state);
@@ -45,9 +45,9 @@ export function PopulationPanel() {
       <section className="needs-grid">
         <div className="need-card">
           <strong>🍲 Alimentación</strong>
-          <span>{foodStored.toFixed(1)} raciones equivalentes</span>
+          <span>{foodStored.toFixed(1)} bayas equivalentes en reserva</span>
           <b className={foodDays < 2 ? 'warning-text' : 'good-text'}>{foodDays.toFixed(1)} días de reserva</b>
-          <small>Consumo diario: {dailyFood.toFixed(2)} raciones. La comida cocida aporta 2 raciones por unidad; las bayas, 1.</small>
+          <small>Consumo del asentamiento: {dailyFood} bayas equivalentes/día ({residents.length * 3} comidas cocidas). Se prioriza la comida cocida; las bayas completan lo que falte.</small>
         </div>
         <div className="need-card">
           <strong>🪵 Calefacción</strong>
@@ -112,7 +112,7 @@ export function PopulationPanel() {
             </div>
           );
         })}
-        <div className="staff-footer">En instalaciones: {totalWorkers} · En tarea: {state.activeActivity ? 1 : 0} · Disponible: {available}</div>
+        <div className="staff-footer">En instalaciones: {totalWorkers} · En tareas: {state.activeActivities.length} · Disponible: {available}</div>
       </section>
 
       <section className="population-section">
