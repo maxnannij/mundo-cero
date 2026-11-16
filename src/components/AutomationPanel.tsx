@@ -40,7 +40,7 @@ export function AutomationPanel() {
               {facilities.map(f => <option key={f.id} value={f.id}>{f.def?.name} · {f.count} construida(s)</option>)}
             </select>
             <label className="field-label">Receta</label>
-            <select className="field-select" value={recipeId} onChange={e => setRecipeId(e.target.value)}>
+            <select className="field-select" value={activeRecipeId} onChange={e => setRecipeId(e.target.value)} disabled={availableRecipes.length === 0}>\n              {availableRecipes.length === 0 && <option value="">No hay recetas para esta instalación</option>}
               {availableRecipes.map(r => <option key={r.id} value={r.id}>{r.name} · {r.durationMs / 1000}s</option>)}
             </select>
             <label className="field-label">Modo de producción</label>
