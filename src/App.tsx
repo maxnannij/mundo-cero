@@ -12,6 +12,7 @@ import { ObjectivesPanel } from './components/ObjectivesPanel';
 import { SettingsPanel } from './components/SettingsPanel';
 import { AutomationPanel } from './components/AutomationPanel';
 import { PopulationPanel } from './components/PopulationPanel';
+import { HelpPanel } from './components/HelpPanel';
 import './App.css';
 
 function GameApp() {
@@ -34,6 +35,7 @@ function GameApp() {
         {tab === 'inventario' && <InventoryPanel />}
         {tab === 'objetivos' && <ObjectivesPanel />}
         {tab === 'ajustes' && <SettingsPanel />}
+        {tab === 'ayuda' && <HelpPanel />}
       </main>
       {gameOver && (
         <div className="gameover-backdrop" role="dialog" aria-modal="true" aria-labelledby="gameover-title">
