@@ -140,7 +140,7 @@ function normalizeSave(value: unknown): GameState | null {
     const firstAdult = population.residents.find(r => r.ageDays >= ADULT_AGE_DAYS);
     if (firstAdult) {
       firstAdult.equipment = firstAdult.equipment || {};
-      for (const [category, toolId] of Object.entries(raw.equippedTools)) {
+      for (const [category, toolId] of Object.entries(raw.equippedTools as Record<string, string>)) {
         if (TOOLS[toolId] && TOOLS[toolId].category === category && !firstAdult.equipment.tool) {
           firstAdult.equipment.tool = toolId;
           normalized.toolInventory[toolId] = Math.max(0, (normalized.toolInventory[toolId] || 0) - 1);
@@ -549,6 +549,11 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
   if (deceased.length > 0) {
     const deceasedIds = new Set(deceased.map(resident => resident.id));
     for (const resident of deceased) {
+      const lostTool = resident.equipment?.tool;
+      if (lostTool && TOOLS[lostTool]) {
+        state.toolInventory[lostTool] = (state.toolInventory[lostTool] || 0) + 1;
+        addLog(state, `${TOOLS[lostTool].name} de ${resident.name} volvió al inventario del asentamiento.`);
+      }
       const oldAge = resident.ageDays >= (resident.lifeExpectancyYears || 90) * DAYS_PER_YEAR;
       addLog(state, oldAge
         ? `${resident.name} falleció por causas naturales a los ${Math.floor(resident.ageDays / DAYS_PER_YEAR)} años.`
@@ -749,7 +754,11 @@ export function unequipResidentTool(state: GameState, residentId: string): boole
   resident.equipment = resident.equipment || {};
   resident.equipment.tool = undefined;
   state.toolInventory[toolId] = (state.toolInventory[toolId] || 0) + 1;
-  if (state.equippedTools[TOOLS[toolId].category] === toolId) delete state.equippedTools[TOOLS[toolId].category];
+  if (state.equippedTools[TOOLS[toolId].category] === toolId) {
+    const replacement = state.population.residents.find(r => r.id !== residentId && r.equipment?.tool && TOOLS[r.equipment.tool]?.category === TOOLS[toolId].category)?.equipment?.tool;
+    if (replacement) state.equippedTools[TOOLS[toolId].category] = replacement;
+    else delete state.equippedTools[TOOLS[toolId].category];
+  }
   addLog(state, `${resident.name} guardó ${TOOLS[toolId].name} en el inventario del asentamiento.`);
   return true;
 }
