@@ -384,3 +384,158 @@ body {
   .nav-label { display: none; }
   .nav-btn { min-width: 44px; }
 }
+
+
+/* Progression depth: mastery and specialization */
+.mastery-card {
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: .8rem;
+  margin: .7rem 0 1rem;
+}
+.mastery-heading, .season-heading, .section-heading, .automation-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+  flex-wrap: wrap;
+}
+.mastery-heading span, .mastery-card small, .mastery-bonuses, .population-section small {
+  color: var(--muted);
+  font-size: .78rem;
+}
+.mastery-bonuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem .8rem;
+  margin: .5rem 0;
+}
+.specialization-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  align-items: center;
+  margin-top: .55rem;
+}
+.specialization-picker strong { width: 100%; font-size: .85rem; }
+
+/* Automation management */
+.automation-create {
+  display: grid;
+  gap: .5rem;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: .9rem;
+  margin: .8rem 0 1.2rem;
+}
+.field-label { color: var(--muted); font-size: .8rem; margin-top: .25rem; }
+.field-select, .field-input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  padding: .55rem .65rem;
+  font: inherit;
+}
+.automation-list { display: grid; gap: .6rem; margin: .6rem 0 1.2rem; }
+.automation-card {
+  padding: .75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel2);
+}
+.automation-on { color: var(--success); font-size: .8rem; }
+.automation-off { color: var(--muted); font-size: .8rem; }
+.automation-queue { padding: .65rem; border: 1px solid var(--border); border-radius: 6px; }
+
+/* Calendar and population */
+.population-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: .5rem;
+  margin: .8rem 0;
+}
+.population-stat {
+  display: flex;
+  flex-direction: column;
+  gap: .12rem;
+  padding: .7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel2);
+}
+.population-stat strong { font-size: 1.35rem; color: var(--accent2); }
+.population-stat span { font-size: .75rem; color: var(--muted); }
+.season-card {
+  padding: .9rem;
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  border-radius: 7px;
+  margin: .6rem 0 1rem;
+}
+.season-heading > div { display: flex; align-items: center; gap: .5rem; font-size: 1.05rem; }
+.season-heading > span { color: var(--muted); font-size: .8rem; }
+.season-icon { font-size: 1.5rem; }
+.season-card p { margin: .5rem 0 .25rem; }
+.season-card small { color: var(--muted); }
+.needs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .7rem;
+  margin: .7rem 0 1.2rem;
+}
+.need-card {
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+  padding: .8rem;
+  background: var(--panel2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.need-card span, .need-card small { color: var(--muted); font-size: .8rem; }
+.need-card b { font-size: 1.05rem; }
+.good-text { color: var(--success); }
+.warning-text { color: var(--accent2); }
+.population-section { margin-top: 1.2rem; }
+.population-section h3 { margin-bottom: .5rem; color: var(--accent2); }
+.resident-card {
+  border: 1px solid var(--border);
+  background: var(--panel2);
+  border-radius: 6px;
+  padding: .65rem;
+  margin: .5rem 0;
+}
+.resident-main { display: flex; gap: .6rem; align-items: center; }
+.resident-icon { font-size: 1.5rem; }
+.resident-main > div { flex: 1; display: flex; flex-direction: column; }
+.resident-main small, .resident-condition { color: var(--muted); font-size: .78rem; }
+.reproduction-progress { padding: .5rem 0 0 2.1rem; font-size: .78rem; color: var(--muted); }
+.worker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  padding: .65rem;
+  border-bottom: 1px solid var(--border);
+}
+.worker-row > div:first-child { display: flex; flex-direction: column; gap: .1rem; }
+.worker-row small { color: var(--muted); }
+.worker-controls { display: flex; gap: .4rem; }
+.worker-controls .btn { min-width: 38px; }
+.staff-footer { text-align: right; color: var(--muted); font-size: .8rem; padding: .6rem 0; }
+.toggle-row { display: flex; gap: .45rem; align-items: center; font-size: .8rem; color: var(--muted); }
+.population-rules { margin: .5rem 0 .8rem 1.2rem; color: var(--muted); font-size: .85rem; }
+.population-rules li { margin: .25rem 0; }
+.season-home-card { margin-bottom: 1rem; }
+
+@media (max-width: 600px) {
+  .population-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .needs-grid { grid-template-columns: 1fr; }
+  .automation-card-head { align-items: flex-start; }
+  .season-heading { align-items: flex-start; }
+  .worker-row { align-items: flex-start; }
+}
