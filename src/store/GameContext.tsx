@@ -3,7 +3,7 @@ import type { GameState, AutomationMode } from './gameState';
 import {
   loadGame, saveGame, tick, processOffline, startActivity, stopActivity, queueCraft,
   buildBuilding, upgradeBuilding, researchTech, equipTool, resetGame, exportSave, importSave,
-  assignWorker, setReproduction, createAutomationOrder, toggleAutomationOrder, removeAutomationOrder,
+  assignWorker, setReproduction, createAutomationOrder, toggleAutomationOrder, removeAutomationOrder, chooseSpecialization,
 } from '../systems/gameEngine';
 import type { SkillId } from '../data/skills';
 
@@ -19,6 +19,7 @@ type Action =
   | { type: 'EQUIP'; toolId: string }
   | { type: 'ASSIGN_WORKER'; buildingId: string; delta: number }
   | { type: 'SET_REPRODUCTION'; enabled: boolean }
+  | { type: 'CHOOSE_SPECIALIZATION'; skillId: SkillId; specialization: 'velocidad' | 'rendimiento' }
   | { type: 'CREATE_AUTOMATION'; recipeId: string; buildingId: string; mode: AutomationMode; target: number }
   | { type: 'TOGGLE_AUTOMATION'; orderId: string }
   | { type: 'REMOVE_AUTOMATION'; orderId: string }
@@ -44,6 +45,7 @@ function reducer(state: GameState, action: Action): GameState {
     case 'EQUIP': equipTool(next, action.toolId); break;
     case 'ASSIGN_WORKER': assignWorker(next, action.buildingId, action.delta); break;
     case 'SET_REPRODUCTION': setReproduction(next, action.enabled); break;
+    case 'CHOOSE_SPECIALIZATION': chooseSpecialization(next, action.skillId, action.specialization); break;
     case 'CREATE_AUTOMATION': createAutomationOrder(next, action.recipeId, action.buildingId, action.mode, action.target); break;
     case 'TOGGLE_AUTOMATION': toggleAutomationOrder(next, action.orderId); break;
     case 'REMOVE_AUTOMATION': removeAutomationOrder(next, action.orderId); break;
@@ -64,6 +66,7 @@ interface GameContextValue {
   doEquip: (id: string) => void;
   doAssignWorker: (buildingId: string, delta: number) => void;
   doSetReproduction: (enabled: boolean) => void;
+  doChooseSpecialization: (skillId: SkillId, specialization: 'velocidad' | 'rendimiento') => void;
   doCreateAutomation: (recipeId: string, buildingId: string, mode: AutomationMode, target: number) => void;
   doToggleAutomation: (orderId: string) => void;
   doRemoveAutomation: (orderId: string) => void;
@@ -119,6 +122,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const doEquip = useCallback((id: string) => dispatch({ type: 'EQUIP', toolId: id }), []);
   const doAssignWorker = useCallback((buildingId: string, delta: number) => dispatch({ type: 'ASSIGN_WORKER', buildingId, delta }), []);
   const doSetReproduction = useCallback((enabled: boolean) => dispatch({ type: 'SET_REPRODUCTION', enabled }), []);
+  const doChooseSpecialization = useCallback((skillId: SkillId, specialization: 'velocidad' | 'rendimiento') => dispatch({ type: 'CHOOSE_SPECIALIZATION', skillId, specialization }), []);
   const doCreateAutomation = useCallback((recipeId: string, buildingId: string, mode: AutomationMode, target: number) => dispatch({ type: 'CREATE_AUTOMATION', recipeId, buildingId, mode, target }), []);
   const doToggleAutomation = useCallback((orderId: string) => dispatch({ type: 'TOGGLE_AUTOMATION', orderId }), []);
   const doRemoveAutomation = useCallback((orderId: string) => dispatch({ type: 'REMOVE_AUTOMATION', orderId }), []);
@@ -138,7 +142,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   return (
     <GameContext.Provider value={{
       state, dispatch, startAct, stopAct, doCraft, doBuild, doUpgrade, doResearch, doEquip,
-      doAssignWorker, doSetReproduction, doCreateAutomation, doToggleAutomation, doRemoveAutomation,
+      doAssignWorker, doSetReproduction, doChooseSpecialization, doCreateAutomation, doToggleAutomation, doRemoveAutomation,
       doReset, doExport, doImport, saveNow,
     }}>
       {children}
