@@ -19,7 +19,7 @@ export function AutomationPanel() {
   const availableRecipes = RECIPE_LIST.filter(r =>
     state.skills[r.skillId]?.level >= r.requiredLevel &&
     (!r.requiredTech || isTechUnlocked(state, r.requiredTech)) &&
-    r.outputs.some(o => o.resourceId !== 'tool'),
+    r.outputs.some(o => o.resourceId !== 'tool') && (!r.requiredBuilding || r.requiredBuilding === selectedFacility),
   );
   const selectedFacility = buildingId || facilities[0]?.id || '';
 
