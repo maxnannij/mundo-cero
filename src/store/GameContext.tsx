@@ -71,6 +71,7 @@ interface GameContextValue {
   doToggleAutomation: (orderId: string) => void;
   doRemoveAutomation: (orderId: string) => void;
   doReset: () => void;
+  doRestart: () => void;
   doExport: () => string;
   doImport: (json: string) => boolean;
   saveNow: () => void;
@@ -129,6 +130,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const doReset = useCallback(() => {
     if (confirm('¿Reiniciar partida? Se perderá todo el progreso.')) dispatch({ type: 'RESET' });
   }, []);
+  const doRestart = useCallback(() => {
+    const freshState = resetGame();
+    saveGame(freshState);
+    dispatch({ type: 'SET_STATE', payload: freshState });
+  }, []);
   const doExport = useCallback(() => exportSave(stateRef.current), []);
   const doImport = useCallback((json: string) => {
     const imported = importSave(json);
@@ -143,7 +149,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     <GameContext.Provider value={{
       state, dispatch, startAct, stopAct, doCraft, doBuild, doUpgrade, doResearch, doEquip,
       doAssignWorker, doSetReproduction, doChooseSpecialization, doCreateAutomation, doToggleAutomation, doRemoveAutomation,
-      doReset, doExport, doImport, saveNow,
+      doReset, doRestart, doExport, doImport, saveNow,
     }}>
       {children}
     </GameContext.Provider>
