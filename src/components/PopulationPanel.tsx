@@ -2,11 +2,12 @@ import { useGame } from '../store/GameContext';
 import { BUILDING_LIST } from '../data/buildings';
 import { getCalendarInfo, DAYS_PER_SEASON, DAYS_PER_YEAR } from '../data/calendar';
 import { ADULT_AGE_DAYS, getAssignedWorkers, getAvailableWorkers } from '../store/gameState';
+import { TOOL_LIST } from '../data/tools';
 
 function yearsOld(ageDays: number): number { return Math.floor(ageDays / DAYS_PER_YEAR); }
 
 export function PopulationPanel() {
-  const { state, doAssignWorker, doSetReproduction } = useGame();
+  const { state, doAssignWorker, doSetReproduction, doEquipResidentTool, doUnequipResidentTool } = useGame();
   const calendar = getCalendarInfo(state.calendar);
   const residents = state.population.residents;
   const adults = residents.filter(r => r.ageDays >= ADULT_AGE_DAYS).length;
@@ -81,6 +82,19 @@ export function PopulationPanel() {
                 </div>
                 <span className="resident-condition">{resident.hungerDays > 0 ? '🍽️ Hambre' : resident.coldDays > 0 ? '🥶 Frío' : '✓ Bien'}</span>
               </div>
+              <div className="resident-equipment">
+                <div className="resident-equipment-heading"><strong>🎒 Equipamiento personal</strong><small>Herramienta asignada</small></div>
+                <div className="resident-equipment-row">
+                  <span>{resident.equipment?.tool ? `${TOOL_LIST.find(t => t.id === resident.equipment?.tool)?.icon || '🛠️'} ${TOOL_LIST.find(t => t.id === resident.equipment?.tool)?.name || resident.equipment.tool}` : 'Sin herramienta equipada'}</span>
+                  {adult && <select className="field-select resident-tool-select" value={resident.equipment?.tool || ''} onChange={e => e.target.value ? doEquipResidentTool(resident.id, e.target.value) : doUnequipResidentTool(resident.id)}>
+                    <option value="">Sin herramienta</option>
+                    {TOOL_LIST.filter(tool => (state.toolInventory[tool.id] || 0) > 0 || resident.equipment?.tool === tool.id).map(tool => <option key={tool.id} value={tool.id}>{tool.icon} {tool.name} · {state.toolInventory[tool.id] || 0} en depósito</option>)}
+                  </select>}
+                  {!adult && <small>Disponible al cumplir 18 años</small>}
+                </div>
+                <div className="resident-equipment-slots"><span>Ropa: <b>Vacío</b></span><span>Arma: <b>Vacío</b></span><span>Accesorio: <b>Vacío</b></span></div>
+              </div>
+              <p className="recipe-meta">Por ahora, el equipamiento organiza los objetos por aldeano. Las bonificaciones aplicadas a tareas individuales se activarán con la asignación de trabajos de la actualización 2.</p>
               {resident.sex === 'mujer' && resident.partnerId && (
                 <div className="reproduction-progress">
                   {pregnant ? <span>🤰 Embarazo: {resident.pregnancyDaysRemaining} días restantes</span> :

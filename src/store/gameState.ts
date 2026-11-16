@@ -8,8 +8,10 @@ export interface SkillState { level: number; xp: number; masteryLevel: number; m
 export interface BuildingInstance { id: string; level: number; count: number; workersAssigned: number; }
 export interface ActiveActivity { id: string; skillId: SkillId; activityId: string; startTime: number; progressMs: number; targetAmount?: number; actionsDone: number; }
 export interface CraftQueueItem { recipeId: string; remaining: number; progressMs: number; startTime: number; automationOrderId?: string; }
+export interface ResidentEquipment { tool?: string; clothing?: string; weapon?: string; accessory?: string; }
 export interface Resident {
   id: string; name: string; sex: 'hombre' | 'mujer'; ageDays: number; health: number;
+  equipment?: ResidentEquipment;
   hungerDays: number; coldDays: number; partnerId?: string; parents?: string[];
   lifeExpectancyYears: number;
   pregnancyDaysRemaining?: number; conceptionProgressDays?: number; childrenBorn?: number;
@@ -23,16 +25,17 @@ export interface AutomationOrder {
 export interface GameState {
   version: number; lastSave: number; lastTick: number; resources: Record<ResourceId, number>;
   maxStorage: number; skills: Record<SkillId, SkillState>; unlockedTechs: string[];
-  buildings: BuildingInstance[]; equippedTools: Record<string, string>; ownedTools: string[];
+  buildings: BuildingInstance[]; equippedTools: Record<string, string>; ownedTools: string[]; toolInventory: Record<string, number>;
   activeActivities: ActiveActivity[]; craftQueue: CraftQueueItem[]; automationOrders: AutomationOrder[];
   completedObjectives: string[]; totalActions: Record<string, number>; log: { time: number; message: string }[];
   calendar: CalendarState; population: PopulationState; settings: { offlineCapHours: number };
 }
-export const SAVE_VERSION = 4;
-export const STORAGE_KEY = 'mundo-cero-save-v4';
-export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v3';
-export const PREVIOUS_STORAGE_KEY = 'mundo-cero-save-v2';
-export const OLDEST_STORAGE_KEY = 'mundo-cero-save-v1';
+export const SAVE_VERSION = 5;
+export const STORAGE_KEY = 'mundo-cero-save-v5';
+export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v4';
+export const PREVIOUS_STORAGE_KEY = 'mundo-cero-save-v3';
+export const OLDEST_STORAGE_KEY = 'mundo-cero-save-v2';
+export const ANCIENT_STORAGE_KEY = 'mundo-cero-save-v1';
 export const ADULT_AGE_DAYS = 18 * DAYS_PER_YEAR;
 export const MAX_POPULATION = 30;
 
@@ -45,8 +48,8 @@ export function generateLifeExpectancyYears(): number {
 export function createInitialPopulation(): PopulationState {
   return {
     residents: [
-      { id: 'resident-1', name: 'Aren', sex: 'hombre', ageDays: 25 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-2', lifeExpectancyYears: generateLifeExpectancyYears() },
-      { id: 'resident-2', name: 'Lira', sex: 'mujer', ageDays: 24 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-1', lifeExpectancyYears: generateLifeExpectancyYears(), pregnancyDaysRemaining: 0, conceptionProgressDays: 0, childrenBorn: 0 },
+      { id: 'resident-1', name: 'Aren', sex: 'hombre', ageDays: 25 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-2', lifeExpectancyYears: generateLifeExpectancyYears(), equipment: {} },
+      { id: 'resident-2', name: 'Lira', sex: 'mujer', ageDays: 24 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-1', lifeExpectancyYears: generateLifeExpectancyYears(), pregnancyDaysRemaining: 0, conceptionProgressDays: 0, childrenBorn: 0, equipment: {} },
     ],
     nextResidentId: 3, births: 0, reproductionEnabled: true,
   };
@@ -60,7 +63,7 @@ export function createInitialState(): GameState {
   for (const s of Object.keys(SKILLS) as SkillId[]) skills[s] = { level: 1, xp: 0, masteryLevel: 0, masteryXp: 0 };
   return {
     version: SAVE_VERSION, lastSave: Date.now(), lastTick: Date.now(), resources, maxStorage: 200,
-    skills, unlockedTechs: [], buildings: [], equippedTools: {}, ownedTools: [],
+    skills, unlockedTechs: [], buildings: [], equippedTools: {}, ownedTools: [], toolInventory: {},
     activeActivities: [], craftQueue: [], automationOrders: [], completedObjectives: [], totalActions: {},
     log: [{ time: Date.now(), message: 'Despertás en un mundo de piedra y silencio. Aren y Lira son los primeros habitantes de este asentamiento. La civilización se ha perdido: es hora de reconstruirla.' }],
     calendar: { totalDays: 0, dayProgressMs: 0 }, population: createInitialPopulation(),

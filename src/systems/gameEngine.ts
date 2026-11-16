@@ -3,7 +3,7 @@ import {
   createInitialState, addResource, removeResource, addXp, addLog,
   getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
   getAvailableWorkers, getAssignedWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
-  PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
+  PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, ANCIENT_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
 import { RECIPES, type RecipeDef } from '../data/recipes';
@@ -51,7 +51,13 @@ function normalizeSave(value: unknown): GameState | null {
   const population = raw.population && Array.isArray(raw.population.residents)
     ? {
         residents: raw.population.residents.filter(r => r && typeof r.id === 'string').map(r => ({
-          ...r, ageDays: Math.max(0, Number(r.ageDays) || 0),
+          ...r, equipment: isRecord(r.equipment) ? {
+            tool: typeof r.equipment.tool === 'string' && TOOLS[r.equipment.tool] ? r.equipment.tool : undefined,
+            clothing: typeof r.equipment.clothing === 'string' ? r.equipment.clothing : undefined,
+            weapon: typeof r.equipment.weapon === 'string' ? r.equipment.weapon : undefined,
+            accessory: typeof r.equipment.accessory === 'string' ? r.equipment.accessory : undefined,
+          } : {},
+          ageDays: Math.max(0, Number(r.ageDays) || 0),
           health: Math.max(0, Math.min(100, Number(r.health) || 0)),
           hungerDays: Math.max(0, Number(r.hungerDays) || 0),
           coldDays: Math.max(0, Number(r.coldDays) || 0),
@@ -109,7 +115,10 @@ function normalizeSave(value: unknown): GameState | null {
     resources, skills, buildings, population, calendar,
     unlockedTechs: Array.isArray(raw.unlockedTechs) ? raw.unlockedTechs.filter(x => typeof x === 'string' && !!TECHS[x]) : [],
     equippedTools: isRecord(raw.equippedTools) ? raw.equippedTools as Record<string, string> : {},
-    ownedTools: Array.isArray(raw.ownedTools) ? raw.ownedTools.filter(x => typeof x === 'string' && !!TOOLS[x]) : [],
+    ownedTools: Array.isArray(raw.ownedTools) ? [...new Set(raw.ownedTools.filter(x => typeof x === 'string' && !!TOOLS[x]))] : [],
+    toolInventory: isRecord(raw.toolInventory)
+      ? Object.fromEntries(Object.entries(raw.toolInventory).filter(([id, count]) => !!TOOLS[id] && typeof count === 'number' && Number.isFinite(count) && count > 0).map(([id, count]) => [id, Math.floor(Number(count))]))
+      : Object.fromEntries((Array.isArray(raw.ownedTools) ? raw.ownedTools : []).filter((id): id is string => typeof id === 'string' && !!TOOLS[id]).map(id => [id, 1])),
     activeActivities,
     craftQueue: Array.isArray(raw.craftQueue) ? raw.craftQueue.filter(x => x && typeof x.recipeId === 'string' && !!RECIPES[x.recipeId]).map(x => ({
       recipeId: x.recipeId, remaining: Math.max(1, Math.floor(Number(x.remaining) || 1)),
@@ -126,6 +135,20 @@ function normalizeSave(value: unknown): GameState | null {
     settings: { offlineCapHours: Math.max(1, Math.min(24, Number(raw.settings?.offlineCapHours) || 8)) },
   };
 
+  // Migrate legacy globally equipped tools to an adult's personal equipment without losing the old bonus mapping.
+  if (!isRecord(raw.toolInventory) && isRecord(raw.equippedTools)) {
+    const firstAdult = population.residents.find(r => r.ageDays >= ADULT_AGE_DAYS);
+    if (firstAdult) {
+      firstAdult.equipment = firstAdult.equipment || {};
+      for (const [category, toolId] of Object.entries(raw.equippedTools as Record<string, string>)) {
+        if (TOOLS[toolId] && TOOLS[toolId].category === category && !firstAdult.equipment.tool) {
+          firstAdult.equipment.tool = toolId;
+          normalized.toolInventory[toolId] = Math.max(0, (normalized.toolInventory[toolId] || 0) - 1);
+        }
+      }
+    }
+  }
+
   // Drop staffing assignments that exceed the current adult workforce.
   const livingAdults = population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
   let staffRemaining = livingAdults;
@@ -139,7 +162,7 @@ function normalizeSave(value: unknown): GameState | null {
 
 export function loadGame(): GameState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY) ?? localStorage.getItem(ANCIENT_STORAGE_KEY);
     if (!raw) return createInitialState();
     const parsed = normalizeSave(JSON.parse(raw) as unknown);
     if (!parsed) throw new Error('La partida guardada no tiene una estructura válida.');
@@ -147,7 +170,7 @@ export function loadGame(): GameState {
   } catch (error) {
     console.error('No se pudo cargar la partida guardada.', error);
     try {
-      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY) ?? localStorage.getItem(ANCIENT_STORAGE_KEY);
       if (raw) localStorage.setItem(`mundo-cero-backup-corrupto-${Date.now()}`, raw);
     } catch { /* Storage may be unavailable or full. */ }
     return createInitialState();
@@ -298,10 +321,9 @@ function processCrafting(state: GameState, deltaMs: number): void {
 function finishCraft(state: GameState, recipe: RecipeDef): void {
   for (const out of recipe.outputs) {
     if (out.resourceId === 'tool' && out.toolId) {
-      if (!state.ownedTools.includes(out.toolId)) {
-        state.ownedTools.push(out.toolId);
-        addLog(state, `¡Fabricaste ${TOOLS[out.toolId]?.name || out.toolId}!`);
-      }
+      state.toolInventory[out.toolId] = (state.toolInventory[out.toolId] || 0) + 1;
+      if (!state.ownedTools.includes(out.toolId)) state.ownedTools.push(out.toolId);
+      addLog(state, `¡Fabricaste ${TOOLS[out.toolId]?.name || out.toolId}! (${state.toolInventory[out.toolId]} disponibles)`);
     } else {
       const bonus = getSkillBonuses(state, recipe.skillId).yieldMult;
       const rawAmount = out.amount * bonus;
@@ -324,8 +346,6 @@ function canUseRecipe(state: GameState, recipe: RecipeDef): boolean {
 
 function queueCraftInternal(state: GameState, recipe: RecipeDef, quantity: number, automationOrderId?: string): boolean {
   if (!canUseRecipe(state, recipe)) return false;
-  const outputsTool = recipe.outputs.some(o => o.resourceId === 'tool' && o.toolId);
-  if (outputsTool && (quantity !== 1 || recipe.outputs.some(o => o.toolId && state.ownedTools.includes(o.toolId)))) return false;
   const qty = Math.max(1, Math.min(50, Math.floor(quantity)));
   let affordable = 0;
   for (; affordable < qty; affordable++) {
@@ -529,6 +549,17 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
   if (deceased.length > 0) {
     const deceasedIds = new Set(deceased.map(resident => resident.id));
     for (const resident of deceased) {
+      const lostTool = resident.equipment?.tool;
+      if (lostTool && TOOLS[lostTool]) {
+        state.toolInventory[lostTool] = (state.toolInventory[lostTool] || 0) + 1;
+        const category = TOOLS[lostTool].category;
+        if (state.equippedTools[category] === lostTool) {
+          const replacement = state.population.residents.find(r => !deceasedIds.has(r.id) && r.equipment?.tool && TOOLS[r.equipment.tool]?.category === category)?.equipment?.tool;
+          if (replacement) state.equippedTools[category] = replacement;
+          else delete state.equippedTools[category];
+        }
+        addLog(state, `${TOOLS[lostTool].name} de ${resident.name} volvió al inventario del asentamiento.`);
+      }
       const oldAge = resident.ageDays >= (resident.lifeExpectancyYears || 90) * DAYS_PER_YEAR;
       addLog(state, oldAge
         ? `${resident.name} falleció por causas naturales a los ${Math.floor(resident.ageDays / DAYS_PER_YEAR)} años.`
@@ -722,6 +753,37 @@ export function equipTool(state: GameState, toolId: string): void {
   addLog(state, `Equipaste: ${tool.name}`);
 }
 
+export function unequipResidentTool(state: GameState, residentId: string): boolean {
+  const resident = state.population.residents.find(r => r.id === residentId);
+  const toolId = resident?.equipment?.tool;
+  if (!resident || !toolId || !TOOLS[toolId]) return false;
+  resident.equipment = resident.equipment || {};
+  resident.equipment.tool = undefined;
+  state.toolInventory[toolId] = (state.toolInventory[toolId] || 0) + 1;
+  if (state.equippedTools[TOOLS[toolId].category] === toolId) {
+    const replacement = state.population.residents.find(r => r.id !== residentId && r.equipment?.tool && TOOLS[r.equipment.tool]?.category === TOOLS[toolId].category)?.equipment?.tool;
+    if (replacement) state.equippedTools[TOOLS[toolId].category] = replacement;
+    else delete state.equippedTools[TOOLS[toolId].category];
+  }
+  addLog(state, `${resident.name} guardó ${TOOLS[toolId].name} en el inventario del asentamiento.`);
+  return true;
+}
+
+export function equipResidentTool(state: GameState, residentId: string, toolId: string): boolean {
+  const resident = state.population.residents.find(r => r.id === residentId);
+  const tool = TOOLS[toolId];
+  if (!resident || !tool || (state.toolInventory[toolId] || 0) < 1) return false;
+  if (resident.ageDays < ADULT_AGE_DAYS) return false;
+  if (resident.equipment?.tool === toolId) return false;
+  if (resident.equipment?.tool) unequipResidentTool(state, residentId);
+  state.toolInventory[toolId] = Math.max(0, (state.toolInventory[toolId] || 0) - 1);
+  resident.equipment = { ...(resident.equipment || {}), tool: toolId };
+  // Keep legacy activity bonuses functional until the individual-worker assignment update.
+  state.equippedTools[tool.category] = toolId;
+  addLog(state, `${resident.name} equipó: ${tool.name}.`);
+  return true;
+}
+
 function checkObjectives(state: GameState): void {
   for (const obj of OBJECTIVES) {
     if (state.completedObjectives.includes(obj.id)) continue;
@@ -747,5 +809,6 @@ export function resetGame(): GameState {
   localStorage.removeItem(LEGACY_STORAGE_KEY);
   localStorage.removeItem(PREVIOUS_STORAGE_KEY);
   localStorage.removeItem(OLDEST_STORAGE_KEY);
+  localStorage.removeItem(ANCIENT_STORAGE_KEY);
   return createInitialState();
 }
