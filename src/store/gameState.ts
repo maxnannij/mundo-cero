@@ -4,7 +4,7 @@ import { TOOLS } from '../data/tools';
 import { BUILDINGS } from '../data/buildings';
 import { getCalendarInfo, type CalendarState, type SeasonId, seasonMultiplier } from '../data/calendar';
 
-export interface SkillState { level: number; xp: number; }
+export interface SkillState { level: number; xp: number; masteryLevel: number; masteryXp: number; specialization?: 'velocidad' | 'rendimiento'; }
 export interface BuildingInstance { id: string; level: number; count: number; workersAssigned: number; }
 export interface ActiveActivity { skillId: SkillId; activityId: string; startTime: number; progressMs: number; targetAmount?: number; actionsDone: number; }
 export interface CraftQueueItem { recipeId: string; remaining: number; progressMs: number; startTime: number; automationOrderId?: string; }
@@ -48,7 +48,7 @@ export function createInitialState(): GameState {
   for (const r of Object.keys(RESOURCES) as ResourceId[]) resources[r] = 0;
   resources.bayas = 20;
   const skills = {} as Record<SkillId, SkillState>;
-  for (const s of Object.keys(SKILLS) as SkillId[]) skills[s] = { level: 1, xp: 0 };
+  for (const s of Object.keys(SKILLS) as SkillId[]) skills[s] = { level: 1, xp: 0, masteryLevel: 0, masteryXp: 0 };
   return {
     version: SAVE_VERSION, lastSave: Date.now(), lastTick: Date.now(), resources, maxStorage: 200,
     skills, unlockedTechs: [], buildings: [], equippedTools: {}, ownedTools: [],
@@ -86,6 +86,29 @@ export function addXp(state: GameState, skillId: SkillId, amount: number): strin
     messages.push(`${SKILLS[skillId].name} ha subido al nivel ${skill.level}.`);
   }
   return messages;
+}
+export function masteryXpForNext(level: number): number { return 500 + level * 250; }
+export function addMasteryXp(state: GameState, skillId: SkillId, amount: number): string[] {
+  const skill = state.skills[skillId];
+  const messages: string[] = [];
+  if (!skill || amount <= 0) return messages;
+  skill.masteryXp += amount;
+  while (skill.masteryLevel < 20 && skill.masteryXp >= masteryXpForNext(skill.masteryLevel)) {
+    skill.masteryXp -= masteryXpForNext(skill.masteryLevel);
+    skill.masteryLevel += 1;
+    messages.push(`${SKILLS[skillId].name}: maestría nivel ${skill.masteryLevel}.`);
+  }
+  return messages;
+}
+export function getSkillBonuses(state: GameState, skillId: SkillId) {
+  const skill = state.skills[skillId];
+  const level = skill?.level || 1;
+  const mastery = skill?.masteryLevel || 0;
+  let speedMult = level >= 20 ? 0.95 : 1;
+  let yieldMult = 1 + mastery * 0.015 + (level >= 10 ? 0.05 : 0) + (level >= 40 ? 0.05 : 0);
+  if (skill?.specialization === 'velocidad') speedMult *= 0.85;
+  if (skill?.specialization === 'rendimiento') yieldMult *= 1.2;
+  return { speedMult, yieldMult };
 }
 export function isTechUnlocked(state: GameState, techId: string): boolean { return state.unlockedTechs.includes(techId); }
 export function hasBuilding(state: GameState, buildingId: string, minCount = 1): boolean {
