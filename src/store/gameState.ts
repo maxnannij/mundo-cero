@@ -1,10 +1,7 @@
 import { RESOURCES, type ResourceId } from '../data/resources';
 import { SKILLS, type SkillId, xpForLevel } from '../data/skills';
 import { TOOLS } from '../data/tools';
-import { RECIPES } from '../data/recipes';
 import { BUILDINGS } from '../data/buildings';
-import { TECHS } from '../data/techs';
-import { OBJECTIVES } from '../data/objectives';
 
 export interface SkillState {
   level: number;
@@ -100,7 +97,7 @@ export function canAfford(state: GameState, costs: { resourceId: ResourceId; amo
 export function addResource(state: GameState, id: ResourceId, amount: number): void {
   if (amount <= 0) return;
   const current = state.resources[id] ?? 0;
-  const max = getMaxStorage(state, id);
+  const max = getMaxStorage(state);
   state.resources[id] = Math.min(current + amount, max);
 }
 
@@ -111,7 +108,7 @@ export function removeResource(state: GameState, id: ResourceId, amount: number)
   return true;
 }
 
-export function getMaxStorage(state: GameState, id?: ResourceId): number {
+export function getMaxStorage(state: GameState, _id?: ResourceId): number {
   let bonus = 0;
   for (const b of state.buildings) {
     const def = BUILDINGS[b.id];

@@ -1,5 +1,5 @@
 import {
-  GameState,
+  type GameState,
   createInitialState,
   addResource,
   removeResource,
@@ -9,7 +9,6 @@ import {
   calculatePassiveProduction,
   canAfford,
   isTechUnlocked,
-  getMaxStorage,
   SAVE_VERSION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
