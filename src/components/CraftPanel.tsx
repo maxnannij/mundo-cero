@@ -11,6 +11,7 @@ export function CraftPanel() {
   const available = RECIPE_LIST.filter(r => {
     if (state.skills[r.skillId].level < r.requiredLevel) return false;
     if (r.requiredTech && !isTechUnlocked(state, r.requiredTech)) return false;
+    if (r.requiredBuilding && !state.buildings.some(b => b.id === r.requiredBuilding && b.count > 0)) return false;
     return true;
   });
 
