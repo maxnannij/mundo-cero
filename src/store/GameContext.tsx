@@ -11,7 +11,7 @@ type Action =
   | { type: 'SET_STATE'; payload: GameState }
   | { type: 'TICK'; delta: number }
   | { type: 'START_ACTIVITY'; skillId: SkillId; activityId: string; target?: number }
-  | { type: 'STOP_ACTIVITY' }
+  | { type: 'STOP_ACTIVITY'; activityInstanceId: string }
   | { type: 'QUEUE_CRAFT'; recipeId: string; qty: number }
   | { type: 'BUILD'; buildingId: string }
   | { type: 'UPGRADE'; buildingId: string }
@@ -37,7 +37,7 @@ function reducer(state: GameState, action: Action): GameState {
   switch (action.type) {
     case 'TICK': tick(next, action.delta); break;
     case 'START_ACTIVITY': startActivity(next, action.skillId, action.activityId, action.target); break;
-    case 'STOP_ACTIVITY': stopActivity(next); break;
+    case 'STOP_ACTIVITY': stopActivity(next, action.activityInstanceId); break;
     case 'QUEUE_CRAFT': queueCraft(next, action.recipeId, action.qty); break;
     case 'BUILD': buildBuilding(next, action.buildingId); break;
     case 'UPGRADE': upgradeBuilding(next, action.buildingId); break;
@@ -58,7 +58,7 @@ interface GameContextValue {
   state: GameState;
   dispatch: React.Dispatch<Action>;
   startAct: (skillId: SkillId, activityId: string, target?: number) => void;
-  stopAct: () => void;
+  stopAct: (activityInstanceId: string) => void;
   doCraft: (recipeId: string, qty: number) => void;
   doBuild: (id: string) => void;
   doUpgrade: (id: string) => void;
@@ -114,7 +114,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startAct = useCallback((skillId: SkillId, activityId: string, target?: number) => dispatch({ type: 'START_ACTIVITY', skillId, activityId, target }), []);
-  const stopAct = useCallback(() => dispatch({ type: 'STOP_ACTIVITY' }), []);
+  const stopAct = useCallback((activityInstanceId: string) => dispatch({ type: 'STOP_ACTIVITY', activityInstanceId }), []);
   const doCraft = useCallback((recipeId: string, qty: number) => dispatch({ type: 'QUEUE_CRAFT', recipeId, qty }), []);
   const doBuild = useCallback((id: string) => dispatch({ type: 'BUILD', buildingId: id }), []);
   const doUpgrade = useCallback((id: string) => dispatch({ type: 'UPGRADE', buildingId: id }), []);
