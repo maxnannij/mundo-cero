@@ -539,3 +539,85 @@ body {
   .season-heading { align-items: flex-start; }
   .worker-row { align-items: flex-start; }
 }
+
+
+/* Game over screen */
+.gameover-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background:
+    radial-gradient(ellipse at center, rgba(99, 35, 24, .34), rgba(8, 7, 6, .94) 72%),
+    rgba(5, 5, 5, .88);
+  backdrop-filter: blur(6px);
+}
+.gameover-panel {
+  width: min(100%, 520px);
+  padding: clamp(1.5rem, 5vw, 2.6rem);
+  text-align: center;
+  background: linear-gradient(160deg, #211b17, #14110f 74%);
+  border: 1px solid #694437;
+  border-radius: 12px;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, .75), inset 0 1px rgba(255, 210, 170, .06);
+}
+.gameover-mark {
+  color: var(--accent2);
+  font-size: .8rem;
+  font-weight: 800;
+  letter-spacing: .22em;
+}
+.gameover-kicker {
+  margin-top: 2rem;
+  color: #c27b5d;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .2em;
+}
+.gameover-panel h2 {
+  margin: .35rem 0 1rem;
+  color: #e7d2c1;
+  font-size: clamp(2.7rem, 12vw, 4.5rem);
+  line-height: 1;
+  letter-spacing: .07em;
+  text-shadow: 0 4px 28px rgba(185, 71, 43, .28);
+}
+.gameover-message {
+  max-width: 360px;
+  margin: 0 auto;
+  color: #bcb0a4;
+  font-size: .95rem;
+}
+.gameover-divider {
+  width: 72px;
+  height: 2px;
+  margin: 1.5rem auto;
+  background: #80513e;
+}
+.gameover-prompt {
+  margin-bottom: 1rem;
+  color: #e7d2c1;
+  font-size: .9rem;
+}
+.gameover-restart {
+  width: 100%;
+  padding: .85rem 1rem;
+  color: #fff8ef;
+  background: #8a4a32;
+  border: 1px solid #b16c4d;
+  border-radius: 7px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+}
+.gameover-restart:hover {
+  background: #a45b3c;
+  transform: translateY(-1px);
+}
+.gameover-restart:focus-visible {
+  outline: 3px solid #e6ad82;
+  outline-offset: 3px;
+}
