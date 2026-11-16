@@ -1,9 +1,9 @@
 import { useGame } from '../store/GameContext';
 import { BUILDING_LIST } from '../data/buildings';
-import { getCalendarInfo, DAYS_PER_SEASON } from '../data/calendar';
+import { getCalendarInfo, DAYS_PER_SEASON, DAYS_PER_YEAR } from '../data/calendar';
 import { ADULT_AGE_DAYS, getAssignedWorkers, getAvailableWorkers } from '../store/gameState';
 
-function yearsOld(ageDays: number): number { return Math.floor(ageDays / 360); }
+function yearsOld(ageDays: number): number { return Math.floor(ageDays / DAYS_PER_YEAR); }
 
 export function PopulationPanel() {
   const { state, doAssignWorker, doSetReproduction } = useGame();
