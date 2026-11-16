@@ -1,6 +1,7 @@
 import { useGame } from '../store/GameContext';
 import { RESOURCES } from '../data/resources';
 import type { ResourceId } from '../data/resources';
+import { getCalendarInfo } from '../data/calendar';
 
 const MAIN_RESOURCES: ResourceId[] = ['madera', 'piedra', 'fibra', 'bayas', 'conocimiento'];
 
@@ -13,12 +14,14 @@ export function Header() {
       : 1;
 
   const eraNames = ['', 'Supervivencia', 'Primer Asentamiento', 'Metalurgia'];
+  const calendar = getCalendarInfo(state.calendar);
 
   return (
     <header className="header">
       <div className="header-left">
         <h1 className="logo">MUNDO CERO</h1>
         <span className="era">Era {era}: {eraNames[era]}</span>
+        <span className="era">{calendar.seasonIcon} {calendar.seasonName} · Día {calendar.dayOfSeason}/30 · Año {calendar.year}</span>
       </div>
       <div className="header-resources">
         {MAIN_RESOURCES.map(id => {
