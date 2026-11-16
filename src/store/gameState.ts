@@ -2,7 +2,7 @@ import { RESOURCES, type ResourceId } from '../data/resources';
 import { SKILLS, type SkillId, xpForLevel } from '../data/skills';
 import { TOOLS } from '../data/tools';
 import { BUILDINGS } from '../data/buildings';
-import { getCalendarInfo, DAYS_PER_YEAR, type CalendarState, type SeasonId, seasonMultiplier } from '../data/calendar';
+import { getCalendarInfo, DAYS_PER_YEAR, type CalendarState, seasonMultiplier } from '../data/calendar';
 
 export interface SkillState { level: number; xp: number; masteryLevel: number; masteryXp: number; specialization?: 'velocidad' | 'rendimiento'; }
 export interface BuildingInstance { id: string; level: number; count: number; workersAssigned: number; }
