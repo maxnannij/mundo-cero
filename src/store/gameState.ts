@@ -133,7 +133,8 @@ export function getAssignedWorkers(state: GameState): number {
 }
 export function getAvailableWorkers(state: GameState): number {
   const adults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
-  return Math.max(0, adults - getAssignedWorkers(state));
+  const activityWorkers = state.activeActivity ? 1 : 0;
+  return Math.max(0, adults - getAssignedWorkers(state) - activityWorkers);
 }
 export function calculatePassiveProduction(state: GameState, deltaMs: number): Record<ResourceId, number> {
   const produced: Partial<Record<ResourceId, number>> = {};
