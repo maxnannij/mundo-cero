@@ -442,6 +442,30 @@ function addNewborn(state: GameState, mother: Resident, father: Resident): void 
   addLog(state, `¡Nació ${name}! La población ahora es de ${state.population.residents.length} habitantes.`);
 }
 
+function shareCloseFamily(a: Resident, b: Resident): boolean {
+  if (a.id === b.id) return true;
+  if (a.parents?.includes(b.id) || b.parents?.includes(a.id)) return true;
+  return (a.parents || []).some(parentId => (b.parents || []).includes(parentId));
+}
+
+function pairNewAdults(state: GameState): void {
+  const unpaired = state.population.residents.filter(r =>
+    r.ageDays >= ADULT_AGE_DAYS && r.health >= 70 && !r.partnerId
+  );
+  const men = unpaired.filter(r => r.sex === 'hombre');
+  for (const man of men) {
+    const woman = unpaired.find(r =>
+      r.sex === 'mujer' && !r.partnerId && !shareCloseFamily(man, r)
+    );
+    if (!woman) continue;
+    man.partnerId = woman.id;
+    woman.partnerId = man.id;
+    woman.conceptionProgressDays = 0;
+    woman.pregnancyDaysRemaining = 0;
+    addLog(state, `${man.name} y ${woman.name} formaron una pareja dentro de la comunidad.`);
+  }
+}
+
 function processDailyPopulation(state: GameState, season: SeasonId): void {
   const fed = consumeDailyFood(state);
   const warm = consumeDailyHeating(state, season);
@@ -464,6 +488,9 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
     }
     resident.ageDays += 1;
   }
+
+  // When children become adults, pair unrelated, healthy residents automatically.
+  pairNewAdults(state);
 
   if (!state.population.reproductionEnabled || state.population.residents.length >= MAX_POPULATION || !hasBuilding(state, 'refugio') || !fed || !warm) return;
   const mothers = state.population.residents.filter(r =>
