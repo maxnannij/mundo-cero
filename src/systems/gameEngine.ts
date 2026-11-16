@@ -1,5 +1,5 @@
 import {
-  type GameState, type AutomationOrder, type AutomationMode, type Resident,
+  type GameState, type ActiveActivity, type AutomationOrder, type AutomationMode, type Resident,
   createInitialState, addResource, removeResource, addXp, addLog,
   getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
   getAvailableWorkers, getAssignedWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
