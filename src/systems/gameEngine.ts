@@ -128,7 +128,6 @@ function normalizeSave(value: unknown): GameState | null {
 
   // Drop staffing assignments that exceed the current adult workforce.
   const livingAdults = population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
-  if (normalized.activeActivity && livingAdults < 1) normalized.activeActivity = null;
   let staffRemaining = livingAdults;
   for (const b of normalized.buildings) {
     b.workersAssigned = Math.min(b.workersAssigned, staffRemaining, (BUILDINGS[b.id]?.workersRequired ?? 1) * b.count);
