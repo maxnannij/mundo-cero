@@ -2,7 +2,7 @@ import { RESOURCES, type ResourceId } from '../data/resources';
 import { SKILLS, type SkillId, xpForLevel } from '../data/skills';
 import { TOOLS } from '../data/tools';
 import { BUILDINGS } from '../data/buildings';
-import { getCalendarInfo, type CalendarState, type SeasonId, seasonMultiplier } from '../data/calendar';
+import { getCalendarInfo, DAYS_PER_YEAR, type CalendarState, type SeasonId, seasonMultiplier } from '../data/calendar';
 
 export interface SkillState { level: number; xp: number; masteryLevel: number; masteryXp: number; specialization?: 'velocidad' | 'rendimiento'; }
 export interface BuildingInstance { id: string; level: number; count: number; workersAssigned: number; }
@@ -30,14 +30,14 @@ export interface GameState {
 export const SAVE_VERSION = 2;
 export const STORAGE_KEY = 'mundo-cero-save-v2';
 export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v1';
-export const ADULT_AGE_DAYS = 18 * 360;
+export const ADULT_AGE_DAYS = 18 * DAYS_PER_YEAR;
 export const MAX_POPULATION = 30;
 
 export function createInitialPopulation(): PopulationState {
   return {
     residents: [
-      { id: 'resident-1', name: 'Aren', sex: 'hombre', ageDays: 25 * 360, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-2' },
-      { id: 'resident-2', name: 'Lira', sex: 'mujer', ageDays: 24 * 360, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-1', pregnancyDaysRemaining: 0, conceptionProgressDays: 0, childrenBorn: 0 },
+      { id: 'resident-1', name: 'Aren', sex: 'hombre', ageDays: 25 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-2' },
+      { id: 'resident-2', name: 'Lira', sex: 'mujer', ageDays: 24 * DAYS_PER_YEAR, health: 100, hungerDays: 0, coldDays: 0, partnerId: 'resident-1', pregnancyDaysRemaining: 0, conceptionProgressDays: 0, childrenBorn: 0 },
     ],
     nextResidentId: 3, births: 0, reproductionEnabled: true,
   };
