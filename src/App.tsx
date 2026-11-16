@@ -10,6 +10,8 @@ import { TechPanel } from './components/TechPanel';
 import { InventoryPanel } from './components/InventoryPanel';
 import { ObjectivesPanel } from './components/ObjectivesPanel';
 import { SettingsPanel } from './components/SettingsPanel';
+import { AutomationPanel } from './components/AutomationPanel';
+import { PopulationPanel } from './components/PopulationPanel';
 import './App.css';
 
 function GameApp() {
@@ -24,6 +26,8 @@ function GameApp() {
         {tab === 'habilidades' && <SkillsPanel />}
         {tab === 'fabricacion' && <CraftPanel />}
         {tab === 'construccion' && <BuildPanel />}
+        {tab === 'automatizacion' && <AutomationPanel />}
+        {tab === 'poblacion' && <PopulationPanel />}
         {tab === 'tecnologia' && <TechPanel />}
         {tab === 'inventario' && <InventoryPanel />}
         {tab === 'objetivos' && <ObjectivesPanel />}
