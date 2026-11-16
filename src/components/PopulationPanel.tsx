@@ -94,6 +94,7 @@ export function PopulationPanel() {
                 </div>
                 <div className="resident-equipment-slots"><span>Ropa: <b>Vacío</b></span><span>Arma: <b>Vacío</b></span><span>Accesorio: <b>Vacío</b></span></div>
               </div>
+              <p className="recipe-meta">Por ahora, el equipamiento organiza los objetos por aldeano. Las bonificaciones aplicadas a tareas individuales se activarán con la asignación de trabajos de la actualización 2.</p>
               {resident.sex === 'mujer' && resident.partnerId && (
                 <div className="reproduction-progress">
                   {pregnant ? <span>🤰 Embarazo: {resident.pregnancyDaysRemaining} días restantes</span> :
