@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useGame } from '../store/GameContext';
 import { SKILLS, SKILL_LIST, xpForLevel, type SkillId } from '../data/skills';
-import { isTechUnlocked, hasBuilding } from '../store/gameState';
+import { isTechUnlocked, hasBuilding, getAvailableWorkers } from '../store/gameState';
 import { TOOLS } from '../data/tools';
 import { RESOURCES } from '../data/resources';
 import { getCalendarInfo } from '../data/calendar';
@@ -17,6 +17,7 @@ export function SkillsPanel() {
   const xpPct = Math.min(100, (skillState.xp / xpNeeded) * 100);
   const availableSkills = SKILL_LIST.filter(s => s.id !== 'metalurgia' || isTechUnlocked(state, 'metalurgia_basica'));
   const active = state.activeActivity;
+  const availableWorkers = getAvailableWorkers(state);
   const season = getCalendarInfo(state.calendar).season;
 
   return (
@@ -89,6 +90,9 @@ export function SkillsPanel() {
         )}
 
         <h3>Actividades · {season}</h3>
+        <p className={availableWorkers > 0 ? 'good-text' : 'warning-text'}>
+          Trabajadores libres: {availableWorkers}{active ? ' · 1 trabajador ocupado en la actividad actual' : ''}
+        </p>
         <div className="activities">
           {skill.activities.map(act => {
             const levelReady = skillState.level >= act.requiredLevel;
@@ -130,13 +134,15 @@ export function SkillsPanel() {
                       <button className="btn danger" onClick={stopAct}>Detener</button>
                     ) : (
                       <>
-                        <button className="btn primary" disabled={!materialsReady} onClick={() => startAct(selectedSkill, act.id)}>Iniciar</button>
+                        <button className="btn primary" disabled={!materialsReady || !!active || availableWorkers < 1} onClick={() => startAct(selectedSkill, act.id)}>Iniciar</button>
                         <input type="number" placeholder="Acciones" min={1} value={target}
                           onChange={e => setTarget(e.target.value)} className="target-input" />
-                        <button className="btn" disabled={!materialsReady || !Number.isFinite(Number(target)) || Number(target) < 1}
+                        <button className="btn" disabled={!materialsReady || !!active || availableWorkers < 1 || !Number.isFinite(Number(target)) || Number(target) < 1}
                           onClick={() => startAct(selectedSkill, act.id, Number(target))}>Hasta X acciones</button>
                       </>
                     )}
+                    {!active && availableWorkers < 1 && <small className="warning-text">No hay trabajadores libres. Liberá uno de una instalación para iniciar esta tarea.</small>}
+                    {active && !isActive && <small className="warning-text">Ya hay otra actividad en curso. Detenela para iniciar esta tarea.</small>}
                   </div>
                 )}
               </div>

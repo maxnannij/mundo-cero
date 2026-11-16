@@ -35,7 +35,7 @@ export const RESOURCES: Record<ResourceId, ResourceDef> = {
     name: 'Madera',
     description: 'Troncos y ramas de árboles comunes. Base de la civilización.',
     category: 'natural',
-    icon: '🪵',
+    icon: '🌳',
     baseMax: 200,
   },
   piedra: {
@@ -43,7 +43,7 @@ export const RESOURCES: Record<ResourceId, ResourceDef> = {
     name: 'Piedra',
     description: 'Rocas y piedras comunes. Material de construcción y herramientas.',
     category: 'natural',
-    icon: '🪨',
+    icon: '⛰️',
     baseMax: 200,
   },
   fibra: {

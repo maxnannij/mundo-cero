@@ -77,7 +77,7 @@ export function PopulationPanel() {
                 <span className="resident-icon">{adult ? (resident.sex === 'hombre' ? '👨' : '👩') : '🧒'}</span>
                 <div>
                   <strong>{resident.name}</strong>
-                  <small>{resident.sex} · {yearsOld(resident.ageDays)} años · Salud {Math.round(resident.health)}%</small>
+                  <small>{resident.sex} · {yearsOld(resident.ageDays)} años · vida estimada {Math.round(resident.lifeExpectancyYears || 90)} años · Salud {Math.round(resident.health)}%</small>
                 </div>
                 <span className="resident-condition">{resident.hungerDays > 0 ? '🍽️ Hambre' : resident.coldDays > 0 ? '🥶 Frío' : '✓ Bien'}</span>
               </div>
@@ -112,7 +112,7 @@ export function PopulationPanel() {
             </div>
           );
         })}
-        <div className="staff-footer">Personal asignado: {totalWorkers} · Disponible: {available}</div>
+        <div className="staff-footer">En instalaciones: {totalWorkers} · En tarea: {state.activeActivity ? 1 : 0} · Disponible: {available}</div>
       </section>
 
       <section className="population-section">
@@ -121,6 +121,7 @@ export function PopulationPanel() {
           <li>El asentamiento comienza con Aren y Lira, una pareja adulta.</li>
           <li>Para tener hijos necesitan un refugio, alimentos suficientes y buena salud.</li>
           <li>La concepción requiere 45 días favorables y el embarazo dura 280 días de juego.</li>
+          <li>La esperanza de vida es individual y aleatoria, con una media cercana a 90 años.</li>
           <li>La población está limitada inicialmente a 30 habitantes.</li>
           <li>La falta de alimentos o calefacción reduce la salud y pausa el crecimiento familiar.</li>
         </ul>
