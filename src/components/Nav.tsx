@@ -8,6 +8,8 @@ const TABS = [
   { id: 'habilidades', label: 'Habilidades', icon: '⚡' },
   { id: 'fabricacion', label: 'Fabricación', icon: '🛠️' },
   { id: 'construccion', label: 'Construcción', icon: '🏗️' },
+  { id: 'automatizacion', label: 'Producción', icon: '⚙️' },
+  { id: 'poblacion', label: 'Población', icon: '👥' },
   { id: 'tecnologia', label: 'Tecnología', icon: '🔬' },
   { id: 'inventario', label: 'Inventario', icon: '📦' },
   { id: 'objetivos', label: 'Objetivos', icon: '🎯' },

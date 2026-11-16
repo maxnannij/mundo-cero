@@ -1,10 +1,12 @@
 import { useGame } from '../store/GameContext';
 import { SKILLS } from '../data/skills';
 import { BUILDINGS } from '../data/buildings';
+import { getCalendarInfo } from '../data/calendar';
 
 export function HomePanel() {
   const { state, stopAct } = useGame();
   const active = state.activeActivity;
+  const calendar = getCalendarInfo(state.calendar);
 
   return (
     <div className="panel home-panel">
@@ -13,6 +15,11 @@ export function HomePanel() {
         La civilización se ha perdido. Despertás rodeado de naturaleza y ruinas. 
         Debés reconstruir el conocimiento y la tecnología de la humanidad desde cero.
       </p>
+
+      <div className="home-card season-home-card">
+        <h3>{calendar.seasonIcon} {calendar.seasonName} · Año {calendar.year}, día {calendar.dayOfSeason}/30</h3>
+        <p>{state.population.residents.length} habitantes · {Math.floor(state.resources.bayas || 0)} bayas · {Math.floor(state.resources.madera || 0)} madera disponible.</p>
+      </div>
 
       <div className="home-grid">
         <div className="home-card">

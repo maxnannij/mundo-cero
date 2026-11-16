@@ -1,4 +1,5 @@
 import type { ResourceId } from './resources';
+import type { SeasonId } from './calendar';
 
 export type SkillId =
   | 'tala'
@@ -23,6 +24,9 @@ export interface ActivityDef {
   outputs: { resourceId: ResourceId; amount: number; chance?: number }[];
   requiredTool?: string;
   unlockTech?: string;
+  requiredBuilding?: string;
+  seasonsAvailable?: SeasonId[];
+  inputs?: { resourceId: ResourceId; amount: number }[];
 }
 
 export interface SkillDef {
@@ -159,6 +163,7 @@ export const SKILLS: Record<SkillId, SkillDef> = {
         name: 'Semillas',
         description: 'Buscar semillas de plantas comestibles.',
         requiredLevel: 5,
+        seasonsAvailable: ['primavera', 'verano', 'otono'],
         durationMs: 4500,
         xp: 12,
         outputs: [{ resourceId: 'semillas', amount: 1 }, { resourceId: 'fibra', amount: 1, chance: 0.3 }],
@@ -186,8 +191,9 @@ export const SKILLS: Record<SkillId, SkillDef> = {
         id: 'rec_bayas',
         skillId: 'recoleccion',
         name: 'Bayas silvestres',
-        description: 'Recolectar bayas de arbustos.',
+        description: 'Recolectar bayas de arbustos. No crecen durante el invierno.',
         requiredLevel: 1,
+        seasonsAvailable: ['primavera', 'verano', 'otono'],
         durationMs: 4000,
         xp: 8,
         outputs: [{ resourceId: 'bayas', amount: 1 }],
@@ -225,6 +231,8 @@ export const SKILLS: Record<SkillId, SkillDef> = {
         name: 'Cocinar bayas',
         description: 'Preparar bayas para hacerlas más seguras y nutritivas.',
         requiredLevel: 1,
+        requiredBuilding: 'fogata',
+        inputs: [{ resourceId: 'bayas', amount: 2 }],
         durationMs: 5000,
         xp: 12,
         outputs: [{ resourceId: 'comida_cocida', amount: 1 }],
@@ -283,6 +291,8 @@ export const SKILLS: Record<SkillId, SkillDef> = {
         name: 'Fundir cobre',
         description: 'Convertir mineral de cobre en lingotes.',
         requiredLevel: 1,
+        requiredBuilding: 'horno',
+        inputs: [{ resourceId: 'mineral_cobre', amount: 2 }, { resourceId: 'carbon_vegetal', amount: 1 }],
         durationMs: 12000,
         xp: 30,
         outputs: [{ resourceId: 'lingote_cobre', amount: 1 }],
@@ -303,6 +313,8 @@ export const SKILLS: Record<SkillId, SkillDef> = {
         name: 'Aserrar tablas',
         description: 'Convertir madera en tablas útiles.',
         requiredLevel: 1,
+        requiredBuilding: 'aserradero',
+        inputs: [{ resourceId: 'madera', amount: 2 }],
         durationMs: 6000,
         xp: 15,
         outputs: [{ resourceId: 'tabla', amount: 1 }],
