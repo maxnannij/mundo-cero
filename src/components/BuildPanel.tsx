@@ -2,6 +2,7 @@ import { useGame } from '../store/GameContext';
 import { BUILDING_LIST } from '../data/buildings';
 import { RESOURCES } from '../data/resources';
 import { isTechUnlocked, canAfford } from '../store/gameState';
+import { getBuildingUpgradeCosts } from '../systems/gameEngine';
 
 export function BuildPanel() {
   const { state, doBuild, doUpgrade } = useGame();
@@ -23,7 +24,8 @@ export function BuildPanel() {
             amount: Math.ceil(c.amount * costMult),
           }));
           const canBuild = unlocked && count < def.maxCount && canAfford(state, costs);
-          const canUpgrade = instance && level < def.maxLevel;
+          const upgradeCosts = instance ? getBuildingUpgradeCosts(state, def.id) : [];
+          const canUpgrade = !!instance && level < def.maxLevel && canAfford(state, upgradeCosts);
 
           return (
             <div key={def.id} className={`building-card ${!unlocked ? 'locked' : ''}`}>
@@ -46,6 +48,7 @@ export function BuildPanel() {
                   ))}
                 </div>
               )}
+              {def.production && <div className="b-meta">Trabajadores: {instance?.workersAssigned || 0}/{(def.workersRequired || 1) * Math.max(count, 1)} · Asigná personal en Población</div>}
               {def.storageBonus && (
                 <div className="b-prod">+{def.storageBonus * count * level} almacenamiento</div>
               )}
