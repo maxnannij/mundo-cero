@@ -72,6 +72,8 @@ export function AutomationPanel() {
             const recipe = RECIPE_LIST.find(r => r.id === order.recipeId);
             const building = BUILDING_LIST.find(b => b.id === order.buildingId);
             const queued = state.craftQueue.some(q => q.automationOrderId === order.id);
+            const facilityInstance = state.buildings.find(b => b.id === order.buildingId);
+            const staffed = !facilityInstance || !BUILDING_LIST.find(b => b.id === order.buildingId)?.production || (facilityInstance.workersAssigned || 0) > 0;
             const output = recipe?.outputs.find(o => o.resourceId !== 'tool');
             const current = output ? state.resources[output.resourceId as keyof typeof state.resources] || 0 : 0;
             const modeText = order.mode === 'continuo'
@@ -85,7 +87,7 @@ export function AutomationPanel() {
                 </div>
                 <p className="recipe-meta">{building?.icon} {building?.name} · {modeText}</p>
                 {order.mode === 'mantener' && <p className="recipe-meta">Inventario actual: {Math.floor(current)} / {order.targetAmount}</p>}
-                <p className="recipe-meta">{queued ? 'Fabricación automática en curso o en cola.' : 'Esperando materiales para iniciar.'}</p>
+                <p className="recipe-meta">{!staffed ? 'Esperando un trabajador asignado a la instalación.' : queued ? 'Fabricación automática en curso o en cola.' : 'Esperando materiales para iniciar.'}</p>
                 <div className="b-actions">
                   <button className="btn" onClick={() => doToggleAutomation(order.id)}>{order.enabled ? 'Pausar' : 'Reanudar'}</button>
                   <button className="btn danger" onClick={() => doRemoveAutomation(order.id)}>Eliminar</button>
