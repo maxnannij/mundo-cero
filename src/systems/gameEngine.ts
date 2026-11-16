@@ -1,44 +1,131 @@
 import {
-  type GameState,
-  createInitialState,
-  addResource,
-  removeResource,
-  addXp,
-  addLog,
-  getToolBonuses,
-  calculatePassiveProduction,
-  canAfford,
-  isTechUnlocked,
-  SAVE_VERSION,
+  type GameState, type AutomationOrder, type AutomationMode, type Resident,
+  createInitialState, addResource, removeResource, addXp, addLog,
+  getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
+  getAvailableWorkers, hasBuilding, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
+  ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
-import { RECIPES } from '../data/recipes';
+import { RECIPES, type RecipeDef } from '../data/recipes';
 import { BUILDINGS } from '../data/buildings';
 import { TECHS } from '../data/techs';
 import { OBJECTIVES } from '../data/objectives';
 import { TOOLS } from '../data/tools';
+import { GAME_DAY_MS, getCalendarInfo, type SeasonId } from '../data/calendar';
 import type { ResourceId } from '../data/resources';
 
-const STORAGE_KEY = 'mundo-cero-save-v1';
+const MAX_SIMULATION_MS = 8 * 60 * 60 * 1000;
+const FOOD_PER_ADULT_DAY = 0.6;
+const FOOD_PER_CHILD_DAY = 0.35;
+const PREGNANCY_DAYS = 280;
+const CONCEPTION_DAYS = 45;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeSave(value: unknown): GameState | null {
+  if (!isRecord(value) || !isRecord(value.resources) || !isRecord(value.skills)) return null;
+  const initial = createInitialState();
+  const raw = value as Partial<GameState>;
+  const resources = { ...initial.resources };
+  for (const id of Object.keys(resources) as ResourceId[]) {
+    const amount = raw.resources?.[id];
+    resources[id] = typeof amount === 'number' && Number.isFinite(amount) && amount >= 0 ? amount : 0;
+  }
+  const skills = { ...initial.skills };
+  for (const id of Object.keys(skills) as SkillId[]) {
+    const item = raw.skills?.[id];
+    if (item && Number.isFinite(item.level) && Number.isFinite(item.xp)) {
+      skills[id] = { level: Math.max(1, Math.min(99, Math.floor(item.level))), xp: Math.max(0, item.xp) };
+    }
+  }
+  const buildings = Array.isArray(raw.buildings)
+    ? raw.buildings.filter(b => b && typeof b.id === 'string' && BUILDINGS[b.id]).map(b => ({
+        id: b.id, level: Math.max(1, Math.floor(Number(b.level) || 1)),
+        count: Math.max(1, Math.floor(Number(b.count) || 1)),
+        workersAssigned: Math.max(0, Math.floor(Number(b.workersAssigned) || 0)),
+      }))
+    : [];
+  const population = raw.population && Array.isArray(raw.population.residents)
+    ? {
+        residents: raw.population.residents.filter(r => r && typeof r.id === 'string').map(r => ({
+          ...r, ageDays: Math.max(0, Number(r.ageDays) || 0),
+          health: Math.max(0, Math.min(100, Number(r.health) || 0)),
+          hungerDays: Math.max(0, Number(r.hungerDays) || 0),
+          coldDays: Math.max(0, Number(r.coldDays) || 0),
+        })) as Resident[],
+        nextResidentId: Math.max(3, Math.floor(Number(raw.population.nextResidentId) || 3)),
+        births: Math.max(0, Math.floor(Number(raw.population.births) || 0)),
+        reproductionEnabled: raw.population.reproductionEnabled !== false,
+      }
+    : initial.population;
+
+  // Old v1 saves had no residents or staffing. Assign the first available adults
+  // to existing production buildings so an established settlement does not stop.
+  if (!raw.population) {
+    let workers = 2;
+    for (const building of buildings) {
+      if (BUILDINGS[building.id]?.production) {
+        building.workersAssigned = Math.min(building.count, workers);
+        workers -= building.workersAssigned;
+      }
+    }
+  }
+
+  const calendar = raw.calendar && Number.isFinite(raw.calendar.totalDays)
+    ? {
+        totalDays: Math.max(0, Math.floor(raw.calendar.totalDays)),
+        dayProgressMs: Math.max(0, Math.min(GAME_DAY_MS - 1, Number(raw.calendar.dayProgressMs) || 0)),
+      }
+    : initial.calendar;
+
+  const normalized: GameState = {
+    ...initial, ...raw, version: SAVE_VERSION,
+    lastSave: Number(raw.lastSave) || Date.now(),
+    lastTick: Number(raw.lastTick) || Number(raw.lastSave) || Date.now(),
+    resources, skills, buildings, population, calendar,
+    unlockedTechs: Array.isArray(raw.unlockedTechs) ? raw.unlockedTechs.filter(x => typeof x === 'string' && !!TECHS[x]) : [],
+    equippedTools: isRecord(raw.equippedTools) ? raw.equippedTools as Record<string, string> : {},
+    ownedTools: Array.isArray(raw.ownedTools) ? raw.ownedTools.filter(x => typeof x === 'string' && !!TOOLS[x]) : [],
+    activeActivity: raw.activeActivity && typeof raw.activeActivity.activityId === 'string' ? raw.activeActivity : null,
+    craftQueue: Array.isArray(raw.craftQueue) ? raw.craftQueue.filter(x => x && typeof x.recipeId === 'string' && !!RECIPES[x.recipeId]).map(x => ({
+      recipeId: x.recipeId, remaining: Math.max(1, Math.floor(Number(x.remaining) || 1)),
+      progressMs: Math.max(0, Number(x.progressMs) || 0), startTime: Number(x.startTime) || Date.now(),
+      automationOrderId: x.automationOrderId,
+    })) : [],
+    automationOrders: Array.isArray(raw.automationOrders) ? raw.automationOrders.filter(x =>
+      x && typeof x.id === 'string' && !!RECIPES[x.recipeId] && !!BUILDINGS[x.buildingId]
+    ).map(x => ({ ...x, enabled: x.enabled !== false, priority: Number(x.priority) || 0, targetAmount: Math.max(1, Number(x.targetAmount) || 100) })) : [],
+    completedObjectives: Array.isArray(raw.completedObjectives) ? raw.completedObjectives.filter(x => typeof x === 'string') : [],
+    totalActions: isRecord(raw.totalActions) ? raw.totalActions as Record<string, number> : {},
+    log: Array.isArray(raw.log) ? raw.log.filter(x => x && typeof x.message === 'string').slice(0, 80) : initial.log,
+    maxStorage: Math.max(50, Number(raw.maxStorage) || initial.maxStorage),
+    settings: { offlineCapHours: Math.max(1, Math.min(24, Number(raw.settings?.offlineCapHours) || 8)) },
+  };
+
+  // Drop staffing assignments that exceed the current adult workforce.
+  let staffRemaining = population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
+  for (const b of normalized.buildings) {
+    b.workersAssigned = Math.min(b.workersAssigned, staffRemaining, (BUILDINGS[b.id]?.workersRequired ?? 1) * b.count);
+    staffRemaining -= b.workersAssigned;
+  }
+  return normalized;
+}
 
 export function loadGame(): GameState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) return createInitialState();
-    const parsed = JSON.parse(raw) as GameState;
-    if (parsed.version !== SAVE_VERSION) {
-      console.warn('Save version mismatch');
-    }
-    const initial = createInitialState();
-    for (const k of Object.keys(initial.resources) as ResourceId[]) {
-      if (parsed.resources[k] === undefined) parsed.resources[k] = 0;
-    }
-    for (const k of Object.keys(initial.skills) as SkillId[]) {
-      if (!parsed.skills[k]) parsed.skills[k] = { level: 1, xp: 0 };
-    }
+    const parsed = normalizeSave(JSON.parse(raw) as unknown);
+    if (!parsed) throw new Error('La partida guardada no tiene una estructura válida.');
     return parsed;
-  } catch (e) {
-    console.error('Failed to load save', e);
+  } catch (error) {
+    console.error('No se pudo cargar la partida guardada.', error);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (raw) localStorage.setItem(`mundo-cero-backup-corrupto-${Date.now()}`, raw);
+    } catch { /* Storage may be unavailable or full. */ }
     return createInitialState();
   }
 }
@@ -46,21 +133,20 @@ export function loadGame(): GameState {
 export function saveGame(state: GameState): void {
   try {
     state.lastSave = Date.now();
+    state.version = SAVE_VERSION;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.error('Failed to save', e);
+  } catch (error) {
+    console.error('No se pudo guardar la partida.', error);
   }
 }
 
 export function exportSave(state: GameState): string {
-  return JSON.stringify(state, null, 2);
+  return JSON.stringify({ ...state, version: SAVE_VERSION }, null, 2);
 }
 
 export function importSave(json: string): GameState | null {
   try {
-    const parsed = JSON.parse(json) as GameState;
-    if (!parsed.resources || !parsed.skills) return null;
-    return parsed;
+    return normalizeSave(JSON.parse(json) as unknown);
   } catch {
     return null;
   }
@@ -68,103 +154,51 @@ export function importSave(json: string): GameState | null {
 
 export function processOffline(state: GameState): { messages: string[]; produced: Record<string, number> } {
   const now = Date.now();
-  const elapsed = now - (state.lastTick || state.lastSave || now);
-  const maxMs = state.settings.offlineCapHours * 3600 * 1000;
+  const elapsed = Math.max(0, now - (state.lastTick || state.lastSave || now));
+  const maxMs = Math.max(1, state.settings.offlineCapHours || 8) * 3600000;
   const effective = Math.min(elapsed, maxMs);
   if (effective < 1000) {
     state.lastTick = now;
     return { messages: [], produced: {} };
   }
 
-  const messages: string[] = [];
-  const hours = (effective / 3600000).toFixed(1);
-  messages.push(`Estuviste ausente ${hours} horas.`);
-
-  const produced = calculatePassiveProduction(state, effective);
-  let totalProduced = 0;
-  for (const [id, amount] of Object.entries(produced)) {
-    if (amount > 0.01) {
-      const whole = Math.floor(amount);
-      if (whole > 0) {
-        addResource(state, id as ResourceId, whole);
-        messages.push(`+${whole} ${id.replace('_', ' ')}`);
-        totalProduced += whole;
-      }
-    }
-  }
-
-  if (state.activeActivity) {
-    const act = getActivity(state.activeActivity.skillId, state.activeActivity.activityId);
-    if (act) {
-      const bonuses = getToolBonuses(state, act.requiredTool || 'ninguna');
-      const duration = act.durationMs * (bonuses.speedMult || 1);
-      const actionsPossible = Math.floor(effective / duration);
-      let actions = Math.min(actionsPossible, 500);
-      if (state.activeActivity.targetAmount) {
-        actions = Math.min(actions, state.activeActivity.targetAmount - state.activeActivity.actionsDone);
-      }
-      for (let i = 0; i < actions; i++) {
-        completeActivityAction(state, act);
-      }
-      if (actions > 0) {
-        messages.push(`Actividad offline: ${actions} acciones de ${act.name}`);
-      }
-      if (state.activeActivity.targetAmount && state.activeActivity.actionsDone >= state.activeActivity.targetAmount) {
-        state.activeActivity = null;
-        messages.push('Objetivo de producción alcanzado. Actividad detenida.');
-      }
-    }
-  }
-
-  if (state.craftQueue.length > 0) {
-    let remainingMs = effective;
-    while (state.craftQueue.length > 0 && remainingMs > 0) {
-      const item = state.craftQueue[0];
-      const recipe = RECIPES[item.recipeId];
-      if (!recipe) {
-        state.craftQueue.shift();
-        continue;
-      }
-      const needed = recipe.durationMs - item.progressMs;
-      if (remainingMs >= needed) {
-        remainingMs -= needed;
-        finishCraft(state, recipe);
-        item.remaining -= 1;
-        item.progressMs = 0;
-        if (item.remaining <= 0) state.craftQueue.shift();
-      } else {
-        item.progressMs += remainingMs;
-        remainingMs = 0;
-      }
-    }
-  }
-
+  const before = { ...state.resources };
+  tick(state, effective);
   state.lastTick = now;
-  if (totalProduced > 0 || messages.length > 1) {
-    addLog(state, `Progreso offline (${hours}h): ${messages.slice(1).join(' | ') || 'sin producción significativa'}`);
+  const produced: Record<string, number> = {};
+  const messages = [`Estuviste ausente ${(effective / 3600000).toFixed(1)} horas.`];
+  for (const [id, amount] of Object.entries(state.resources)) {
+    const delta = amount - (before[id as ResourceId] || 0);
+    if (delta > 0.01) {
+      produced[id] = delta;
+      messages.push(`+${Math.floor(delta * 100) / 100} ${id.replaceAll('_', ' ')}`);
+    }
   }
+  addLog(state, `Progreso offline: ${messages.slice(0, 7).join(' · ')}`);
   return { messages, produced };
 }
 
 function getActivity(skillId: SkillId, activityId: string): ActivityDef | null {
   const skill = SKILLS[skillId];
-  if (!skill) return null;
-  return skill.activities.find(a => a.id === activityId) || null;
+  return skill?.activities.find(a => a.id === activityId) || null;
+}
+
+function isSeasonAvailable(activity: ActivityDef, season: SeasonId): boolean {
+  return !activity.seasonsAvailable || activity.seasonsAvailable.includes(season);
 }
 
 export function startActivity(state: GameState, skillId: SkillId, activityId: string, targetAmount?: number): boolean {
   const act = getActivity(skillId, activityId);
-  if (!act) return false;
+  if (!act || !state.skills[skillId]) return false;
   if (state.skills[skillId].level < act.requiredLevel) return false;
   if (act.unlockTech && !isTechUnlocked(state, act.unlockTech)) return false;
+  if (act.requiredBuilding && !hasBuilding(state, act.requiredBuilding)) return false;
+  if (!isSeasonAvailable(act, getCalendarInfo(state.calendar).season)) return false;
+  if (targetAmount !== undefined && (!Number.isFinite(targetAmount) || targetAmount < 1)) return false;
 
   state.activeActivity = {
-    skillId,
-    activityId,
-    startTime: Date.now(),
-    progressMs: 0,
-    targetAmount,
-    actionsDone: 0,
+    skillId, activityId, startTime: Date.now(), progressMs: 0,
+    targetAmount: targetAmount ? Math.floor(targetAmount) : undefined, actionsDone: 0,
   };
   addLog(state, `Comenzaste: ${act.name}`);
   return true;
@@ -177,81 +211,61 @@ export function stopActivity(state: GameState): void {
   }
 }
 
-function completeActivityAction(state: GameState, act: ActivityDef): void {
+function completeActivityAction(state: GameState, act: ActivityDef): boolean {
+  const season = getCalendarInfo(state.calendar).season;
+  if (!isSeasonAvailable(act, season)) {
+    addLog(state, `${act.name} no está disponible durante el invierno/esta estación.`);
+    state.activeActivity = null;
+    return false;
+  }
+  if (act.requiredBuilding && !hasBuilding(state, act.requiredBuilding)) {
+    addLog(state, `Necesitás construir ${BUILDINGS[act.requiredBuilding]?.name || act.requiredBuilding} para continuar.`);
+    state.activeActivity = null;
+    return false;
+  }
+  if (act.inputs?.length && !canAfford(state, act.inputs)) {
+    addLog(state, `Faltan materiales para continuar: ${act.inputs.map(i => `${i.amount} ${i.resourceId}`).join(', ')}.`);
+    state.activeActivity = null;
+    return false;
+  }
+  for (const input of act.inputs ?? []) removeResource(state, input.resourceId, input.amount);
   const bonuses = getToolBonuses(state, act.requiredTool || 'ninguna');
   const yieldMult = bonuses.yieldMult || 1;
-
   for (const out of act.outputs) {
-    const chance = out.chance ?? 1;
-    if (Math.random() <= chance) {
-      const amount = Math.max(1, Math.floor(out.amount * yieldMult));
-      addResource(state, out.resourceId, amount);
-    }
+    const chance = Math.min(1, Math.max(0, (out.chance ?? 1) + bonuses.specialChance));
+    if (Math.random() <= chance) addResource(state, out.resourceId, Math.max(1, Math.floor(out.amount * yieldMult)));
   }
-  const msgs = addXp(state, act.skillId, act.xp);
-  for (const m of msgs) addLog(state, m);
-
+  for (const message of addXp(state, act.skillId, act.xp)) addLog(state, message);
   if (state.activeActivity) {
     state.activeActivity.actionsDone += 1;
     state.totalActions[act.id] = (state.totalActions[act.id] || 0) + 1;
   }
   checkObjectives(state);
+  return true;
 }
 
-export function tick(state: GameState, deltaMs: number): void {
-  const produced = calculatePassiveProduction(state, deltaMs);
-  for (const [id, amount] of Object.entries(produced)) {
-    if (amount >= 1) {
-      const whole = Math.floor(amount);
-      addResource(state, id as ResourceId, whole);
-    }
-  }
-
-  if (state.activeActivity) {
-    const act = getActivity(state.activeActivity.skillId, state.activeActivity.activityId);
-    if (!act) {
-      state.activeActivity = null;
-      return;
-    }
-    const bonuses = getToolBonuses(state, act.requiredTool || 'ninguna');
-    const duration = act.durationMs * (bonuses.speedMult || 1);
-    state.activeActivity.progressMs += deltaMs;
-
-    while (state.activeActivity.progressMs >= duration) {
-      state.activeActivity.progressMs -= duration;
-      completeActivityAction(state, act);
-
-      if (state.activeActivity.targetAmount && state.activeActivity.actionsDone >= state.activeActivity.targetAmount) {
-        addLog(state, `Objetivo alcanzado (${state.activeActivity.targetAmount}). Actividad detenida.`);
-        state.activeActivity = null;
-        break;
-      }
-    }
-  }
-
-  if (state.craftQueue.length > 0) {
+function processCrafting(state: GameState, deltaMs: number): void {
+  let remainingMs = deltaMs;
+  let safety = 0;
+  while (state.craftQueue.length > 0 && remainingMs > 0 && safety++ < 2000) {
     const item = state.craftQueue[0];
     const recipe = RECIPES[item.recipeId];
-    if (!recipe) {
-      state.craftQueue.shift();
+    if (!recipe) { state.craftQueue.shift(); continue; }
+    const needed = Math.max(0, recipe.durationMs - item.progressMs);
+    if (remainingMs + 1e-9 >= needed) {
+      remainingMs = Math.max(0, remainingMs - needed);
+      item.progressMs = 0;
+      finishCraft(state, recipe);
+      item.remaining -= 1;
+      if (item.remaining <= 0) state.craftQueue.shift();
     } else {
-      item.progressMs += deltaMs;
-      if (item.progressMs >= recipe.durationMs) {
-        item.progressMs = 0;
-        finishCraft(state, recipe);
-        item.remaining -= 1;
-        if (item.remaining <= 0) {
-          state.craftQueue.shift();
-          addLog(state, `Cola de fabricación: ${recipe.name} completada.`);
-        }
-      }
+      item.progressMs += remainingMs;
+      remainingMs = 0;
     }
   }
-
-  state.lastTick = Date.now();
 }
 
-function finishCraft(state: GameState, recipe: typeof RECIPES[string]): void {
+function finishCraft(state: GameState, recipe: RecipeDef): void {
   for (const out of recipe.outputs) {
     if (out.resourceId === 'tool' && out.toolId) {
       if (!state.ownedTools.includes(out.toolId)) {
@@ -262,97 +276,300 @@ function finishCraft(state: GameState, recipe: typeof RECIPES[string]): void {
       addResource(state, out.resourceId as ResourceId, out.amount);
     }
   }
-  const msgs = addXp(state, recipe.skillId, recipe.xp);
-  for (const m of msgs) addLog(state, m);
+  for (const message of addXp(state, recipe.skillId, recipe.xp)) addLog(state, message);
   checkObjectives(state);
+}
+
+function canUseRecipe(state: GameState, recipe: RecipeDef): boolean {
+  if (!state.skills[recipe.skillId] || state.skills[recipe.skillId].level < recipe.requiredLevel) return false;
+  if (recipe.requiredTech && !isTechUnlocked(state, recipe.requiredTech)) return false;
+  return true;
+}
+
+function queueCraftInternal(state: GameState, recipe: RecipeDef, quantity: number, automationOrderId?: string): boolean {
+  if (!canUseRecipe(state, recipe)) return false;
+  const outputsTool = recipe.outputs.some(o => o.resourceId === 'tool' && o.toolId);
+  if (outputsTool && (quantity !== 1 || recipe.outputs.some(o => o.toolId && state.ownedTools.includes(o.toolId)))) return false;
+  const qty = Math.max(1, Math.min(50, Math.floor(quantity)));
+  let affordable = 0;
+  for (; affordable < qty; affordable++) {
+    if (!canAfford(state, recipe.inputs)) break;
+    for (const input of recipe.inputs) removeResource(state, input.resourceId, input.amount);
+  }
+  if (affordable === 0) return false;
+  state.craftQueue.push({ recipeId: recipe.id, remaining: affordable, progressMs: 0, startTime: Date.now(), automationOrderId });
+  addLog(state, `Añadido a cola: ${recipe.name} x${affordable}`);
+  return true;
 }
 
 export function queueCraft(state: GameState, recipeId: string, quantity: number): boolean {
   const recipe = RECIPES[recipeId];
-  if (!recipe) return false;
-  if (state.skills[recipe.skillId].level < recipe.requiredLevel) return false;
-  if (recipe.requiredTech && !isTechUnlocked(state, recipe.requiredTech)) return false;
+  if (!recipe || !Number.isFinite(quantity) || quantity < 1) return false;
+  return queueCraftInternal(state, recipe, quantity);
+}
 
-  for (let i = 0; i < quantity; i++) {
-    if (!canAfford(state, recipe.inputs)) {
-      if (i === 0) return false;
-      quantity = i;
-      break;
-    }
-    for (const inp of recipe.inputs) {
-      removeResource(state, inp.resourceId, inp.amount);
+export function createAutomationOrder(
+  state: GameState, recipeId: string, buildingId: string, mode: AutomationMode, targetAmount = 100,
+): boolean {
+  const recipe = RECIPES[recipeId];
+  if (!recipe || !hasBuilding(state, buildingId) || !canUseRecipe(state, recipe)) return false;
+  if (state.automationOrders.some(o => o.recipeId === recipeId && o.buildingId === buildingId)) return false;
+  const output = recipe.outputs.find(o => o.resourceId !== 'tool');
+  if (mode === 'mantener' && (!output || !Number.isFinite(targetAmount) || targetAmount < 1)) return false;
+  const order: AutomationOrder = {
+    id: `auto-${Date.now()}-${state.automationOrders.length}`,
+    recipeId, buildingId, mode, targetAmount: Math.max(1, Math.floor(targetAmount)),
+    enabled: true, priority: state.automationOrders.length,
+  };
+  state.automationOrders.push(order);
+  addLog(state, `Automatización creada: ${recipe.name} en ${BUILDINGS[buildingId].name}.`);
+  return true;
+}
+
+export function toggleAutomationOrder(state: GameState, orderId: string): void {
+  const order = state.automationOrders.find(o => o.id === orderId);
+  if (order) order.enabled = !order.enabled;
+}
+
+export function removeAutomationOrder(state: GameState, orderId: string): void {
+  state.automationOrders = state.automationOrders.filter(o => o.id !== orderId);
+  state.craftQueue = state.craftQueue.filter(item => item.automationOrderId !== orderId);
+}
+
+function processAutomations(state: GameState): void {
+  for (const order of [...state.automationOrders].sort((a, b) => b.priority - a.priority)) {
+    if (!order.enabled || !hasBuilding(state, order.buildingId)) continue;
+    if (state.craftQueue.some(item => item.automationOrderId === order.id)) continue;
+    const recipe = RECIPES[order.recipeId];
+    if (!recipe || !canUseRecipe(state, recipe)) continue;
+    const output = recipe.outputs.find(o => o.resourceId !== 'tool');
+    if (order.mode === 'mantener' && output && (state.resources[output.resourceId as ResourceId] || 0) >= order.targetAmount) continue;
+    if (state.craftQueue.length >= 12) break;
+    queueCraftInternal(state, recipe, 1, order.id);
+  }
+}
+
+function processContinuousSystems(state: GameState, deltaMs: number): void {
+  const passive = calculatePassiveProduction(state, deltaMs);
+  for (const [id, amount] of Object.entries(passive)) addResource(state, id as ResourceId, amount);
+
+  if (state.activeActivity) {
+    const active = state.activeActivity;
+    const act = getActivity(active.skillId, active.activityId);
+    if (!act) state.activeActivity = null;
+    else {
+      const speed = getToolBonuses(state, act.requiredTool || 'ninguna').speedMult || 1;
+      const duration = Math.max(100, act.durationMs * speed);
+      active.progressMs += deltaMs;
+      let actions = 0;
+      while (state.activeActivity && state.activeActivity.progressMs >= duration && actions++ < 20_000) {
+        if (!completeActivityAction(state, act)) break;
+        const current = state.activeActivity;
+        if (!current) break;
+        current.progressMs -= duration;
+        if (current.targetAmount && current.actionsDone >= current.targetAmount) {
+          addLog(state, `Objetivo alcanzado (${current.targetAmount} acciones). Actividad detenida.`);
+          state.activeActivity = null;
+          break;
+        }
+      }
     }
   }
-  if (quantity <= 0) return false;
 
-  state.craftQueue.push({
-    recipeId,
-    remaining: quantity,
-    progressMs: 0,
-    startTime: Date.now(),
+  processCrafting(state, deltaMs);
+  processAutomations(state);
+}
+
+function consumeDailyFood(state: GameState): boolean {
+  const residents = state.population.residents;
+  const needed = residents.reduce((sum, r) => sum + (r.ageDays >= ADULT_AGE_DAYS ? FOOD_PER_ADULT_DAY : FOOD_PER_CHILD_DAY), 0);
+  if (needed <= 0) return true;
+  const cookedRations = Math.min(needed, (state.resources.comida_cocida || 0) * 2);
+  if (cookedRations > 0) removeResource(state, 'comida_cocida', cookedRations / 2);
+  const remaining = Math.max(0, needed - cookedRations);
+  const berriesUsed = Math.min(remaining, state.resources.bayas || 0);
+  if (berriesUsed > 0) removeResource(state, 'bayas', berriesUsed);
+  return remaining - berriesUsed <= 1e-6;
+}
+
+function consumeDailyHeating(state: GameState, season: SeasonId): boolean {
+  if (season !== 'invierno' || state.population.residents.length === 0) return true;
+  const adults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS).length;
+  const children = state.population.residents.length - adults;
+  let neededWood = adults * 0.35 + children * 0.18;
+  if (hasBuilding(state, 'fogata')) neededWood *= 0.55;
+  if (hasBuilding(state, 'refugio') && hasBuilding(state, 'fogata')) neededWood *= 0.85;
+  const used = Math.min(state.resources.madera || 0, neededWood);
+  if (used > 0) removeResource(state, 'madera', used);
+  return used + 1e-6 >= neededWood;
+}
+
+const CHILD_NAMES = ['Nima', 'Suri', 'Taren', 'Uma', 'Ilan', 'Mara', 'Noa', 'Ayla', 'Luan', 'Eira'];
+
+function addNewborn(state: GameState, mother: Resident, father: Resident): void {
+  if (state.population.residents.length >= MAX_POPULATION) return;
+  const sex = Math.random() < 0.5 ? 'hombre' : 'mujer';
+  const id = `resident-${state.population.nextResidentId++}`;
+  const name = CHILD_NAMES[(state.population.nextResidentId + state.population.births) % CHILD_NAMES.length];
+  state.population.residents.push({
+    id, name, sex, ageDays: 0, health: 100, hungerDays: 0, coldDays: 0,
+    parents: [mother.id, father.id], pregnancyDaysRemaining: 0,
+    conceptionProgressDays: 0, childrenBorn: 0,
   });
-  addLog(state, `Añadido a cola: ${recipe.name} x${quantity}`);
-  return true;
+  mother.childrenBorn = (mother.childrenBorn || 0) + 1;
+  mother.pregnancyDaysRemaining = 0;
+  mother.conceptionProgressDays = 0;
+  state.population.births += 1;
+  addLog(state, `¡Nació ${name}! La población ahora es de ${state.population.residents.length} habitantes.`);
+}
+
+function processDailyPopulation(state: GameState, season: SeasonId): void {
+  const fed = consumeDailyFood(state);
+  const warm = consumeDailyHeating(state, season);
+  for (const resident of state.population.residents) {
+    if (fed) {
+      resident.hungerDays = 0;
+      resident.health = Math.min(100, resident.health + 1.5);
+    } else {
+      resident.hungerDays += 1;
+      resident.health = Math.max(20, resident.health - 3);
+      if (resident.hungerDays === 1 || resident.hungerDays % 5 === 0) addLog(state, `${resident.name} tiene hambre. Conseguí alimentos para el asentamiento.`);
+    }
+    if (season === 'invierno' && !warm) {
+      resident.coldDays += 1;
+      resident.health = Math.max(20, resident.health - 2);
+      if (resident.coldDays === 1 || resident.coldDays % 5 === 0) addLog(state, `${resident.name} está pasando frío. Hace falta madera para calefaccionar.`);
+    } else {
+      resident.coldDays = 0;
+      if (fed) resident.health = Math.min(100, resident.health + 0.5);
+    }
+    resident.ageDays += 1;
+  }
+
+  if (!state.population.reproductionEnabled || state.population.residents.length >= MAX_POPULATION || !hasBuilding(state, 'refugio') || !fed || !warm) return;
+  const mothers = state.population.residents.filter(r =>
+    r.sex === 'mujer' && r.ageDays >= ADULT_AGE_DAYS && r.ageDays <= 40 * 360 &&
+    (r.pregnancyDaysRemaining || 0) === 0 && (r.childrenBorn || 0) < 4 && r.health >= 70
+  );
+  for (const mother of mothers) {
+    if (mother.pregnancyDaysRemaining && mother.pregnancyDaysRemaining > 0) {
+      mother.pregnancyDaysRemaining -= 1;
+      if (mother.pregnancyDaysRemaining <= 0) {
+        const father = state.population.residents.find(r => r.id === mother.partnerId && r.sex === 'hombre' && r.ageDays >= ADULT_AGE_DAYS && r.health >= 70);
+        if (father) addNewborn(state, mother, father);
+        else mother.pregnancyDaysRemaining = 0;
+      }
+      continue;
+    }
+    const father = state.population.residents.find(r => r.id === mother.partnerId && r.sex === 'hombre' && r.ageDays >= ADULT_AGE_DAYS && r.health >= 70);
+    if (!father) continue;
+    mother.conceptionProgressDays = (mother.conceptionProgressDays || 0) + 1;
+    if (mother.conceptionProgressDays >= CONCEPTION_DAYS) {
+      mother.pregnancyDaysRemaining = PREGNANCY_DAYS;
+      mother.conceptionProgressDays = 0;
+      addLog(state, `Aren y Lira esperan un nuevo integrante para la comunidad. Tiempo estimado: ${PREGNANCY_DAYS} días.`);
+    }
+  }
+}
+
+function processDailySystems(state: GameState, previousSeason: SeasonId): void {
+  const info = getCalendarInfo(state.calendar);
+  if (info.season !== previousSeason) {
+    addLog(state, `${info.seasonIcon} Comienza ${info.season.toLowerCase()}. ${info.seasonDescription}`);
+    if (info.season === 'invierno') addLog(state, 'El invierno llegó: las bayas silvestres dejan de crecer y la población necesita leña para calentarse.');
+  }
+  processDailyPopulation(state, info.season);
+  if (state.activeActivity) {
+    const act = getActivity(state.activeActivity.skillId, state.activeActivity.activityId);
+    if (act && !isSeasonAvailable(act, info.season)) {
+      addLog(state, `${act.name} se detuvo: no está disponible durante ${info.season}.`);
+      state.activeActivity = null;
+    }
+  }
+}
+
+export function tick(state: GameState, deltaMs: number): void {
+  let remaining = Math.min(Math.max(0, deltaMs), MAX_SIMULATION_MS);
+  let safety = 0;
+  while (remaining > 0 && safety++ < 20_000) {
+    const untilDay = GAME_DAY_MS - state.calendar.dayProgressMs;
+    const step = Math.min(remaining, Math.max(1, untilDay));
+    const previousSeason = getCalendarInfo(state.calendar).season;
+    processContinuousSystems(state, step);
+    state.calendar.dayProgressMs += step;
+    remaining -= step;
+    if (state.calendar.dayProgressMs >= GAME_DAY_MS - 1e-6) {
+      state.calendar.dayProgressMs = Math.max(0, state.calendar.dayProgressMs - GAME_DAY_MS);
+      state.calendar.totalDays += 1;
+      processDailySystems(state, previousSeason);
+    }
+  }
+  state.lastTick = Date.now();
 }
 
 export function buildBuilding(state: GameState, buildingId: string): boolean {
   const def = BUILDINGS[buildingId];
-  if (!def) return false;
-  if (def.requiredTech && !isTechUnlocked(state, def.requiredTech)) return false;
-
+  if (!def || (def.requiredTech && !isTechUnlocked(state, def.requiredTech))) return false;
   const existing = state.buildings.find(b => b.id === buildingId);
-  const currentCount = existing?.count || 0;
-  if (currentCount >= def.maxCount) return false;
-
-  const costMult = Math.pow(def.costScale, currentCount);
-  const costs = def.baseCost.map(c => ({
-    resourceId: c.resourceId,
-    amount: Math.ceil(c.amount * costMult),
-  }));
+  const count = existing?.count || 0;
+  if (count >= def.maxCount) return false;
+  const costs = def.baseCost.map(c => ({ resourceId: c.resourceId, amount: Math.ceil(c.amount * Math.pow(def.costScale, count)) }));
   if (!canAfford(state, costs)) return false;
-
-  for (const c of costs) removeResource(state, c.resourceId, c.amount);
-
-  if (existing) {
-    existing.count += 1;
-  } else {
-    state.buildings.push({ id: buildingId, level: 1, count: 1 });
-  }
+  for (const cost of costs) removeResource(state, cost.resourceId, cost.amount);
+  if (existing) existing.count += 1;
+  else state.buildings.push({ id: buildingId, level: 1, count: 1, workersAssigned: 0 });
   addLog(state, `Construiste: ${def.name}`);
   checkObjectives(state);
   return true;
+}
+
+export function getBuildingUpgradeCosts(state: GameState, buildingId: string): { resourceId: ResourceId; amount: number }[] {
+  const instance = state.buildings.find(b => b.id === buildingId);
+  const def = BUILDINGS[buildingId];
+  if (!instance || !def) return [];
+  const mult = Math.pow(def.upgradeCostMult, instance.level);
+  return def.baseCost.map(c => ({ resourceId: c.resourceId, amount: Math.ceil(c.amount * 0.6 * mult) }));
 }
 
 export function upgradeBuilding(state: GameState, buildingId: string): boolean {
   const instance = state.buildings.find(b => b.id === buildingId);
   const def = BUILDINGS[buildingId];
   if (!instance || !def || instance.level >= def.maxLevel) return false;
-
-  const costMult = Math.pow(def.upgradeCostMult, instance.level);
-  const costs = def.baseCost.map(c => ({
-    resourceId: c.resourceId,
-    amount: Math.ceil(c.amount * 0.6 * costMult),
-  }));
+  const costs = getBuildingUpgradeCosts(state, buildingId);
   if (!canAfford(state, costs)) return false;
-  for (const c of costs) removeResource(state, c.resourceId, c.amount);
+  for (const cost of costs) removeResource(state, cost.resourceId, cost.amount);
   instance.level += 1;
   addLog(state, `${def.name} mejorado a nivel ${instance.level}`);
   return true;
 }
 
+export function assignWorker(state: GameState, buildingId: string, delta: number): boolean {
+  const instance = state.buildings.find(b => b.id === buildingId);
+  const def = BUILDINGS[buildingId];
+  if (!instance || !def?.production || !Number.isFinite(delta) || delta === 0) return false;
+  if (delta > 0) {
+    const max = (def.workersRequired ?? 1) * instance.count;
+    if (instance.workersAssigned >= max || getAvailableWorkers(state) < delta) return false;
+    instance.workersAssigned = Math.min(max, instance.workersAssigned + Math.floor(delta));
+  } else {
+    instance.workersAssigned = Math.max(0, instance.workersAssigned + Math.ceil(delta));
+  }
+  addLog(state, `Personal asignado a ${def.name}: ${instance.workersAssigned}.`);
+  return true;
+}
+
+export function setReproduction(state: GameState, enabled: boolean): void {
+  state.population.reproductionEnabled = enabled;
+  addLog(state, enabled ? 'La reproducción de la comunidad está habilitada.' : 'La reproducción de la comunidad está pausada.');
+}
+
 export function researchTech(state: GameState, techId: string): boolean {
   const tech = TECHS[techId];
-  if (!tech) return false;
-  if (isTechUnlocked(state, techId)) return false;
-  for (const pre of tech.prerequisites) {
-    if (!isTechUnlocked(state, pre)) return false;
-  }
-  if (!canAfford(state, tech.cost)) return false;
-  if ((state.resources.conocimiento || 0) < tech.knowledgeCost) return false;
-
-  for (const c of tech.cost) removeResource(state, c.resourceId, c.amount);
+  if (!tech || isTechUnlocked(state, techId)) return false;
+  if (!tech.prerequisites.every(pre => isTechUnlocked(state, pre))) return false;
+  if (!canAfford(state, tech.cost) || (state.resources.conocimiento || 0) < tech.knowledgeCost) return false;
+  for (const cost of tech.cost) removeResource(state, cost.resourceId, cost.amount);
   removeResource(state, 'conocimiento', tech.knowledgeCost);
-
   state.unlockedTechs.push(techId);
   addLog(state, `¡Investigación completada: ${tech.name}!`);
   checkObjectives(state);
@@ -369,34 +586,25 @@ export function equipTool(state: GameState, toolId: string): void {
 function checkObjectives(state: GameState): void {
   for (const obj of OBJECTIVES) {
     if (state.completedObjectives.includes(obj.id)) continue;
-    let done = false;
     const cond = obj.condition;
-    if (cond.type === 'resource') {
-      done = (state.resources[cond.target as ResourceId] || 0) >= cond.amount;
-    } else if (cond.type === 'skill_level') {
-      done = (state.skills[cond.target as SkillId]?.level || 0) >= cond.amount;
-    } else if (cond.type === 'building') {
-      done = (state.buildings.find(b => b.id === cond.target)?.count || 0) >= cond.amount;
-    } else if (cond.type === 'tech') {
-      if (cond.target === 'any') {
-        done = state.unlockedTechs.length >= cond.amount;
-      } else {
-        done = state.unlockedTechs.includes(cond.target);
-      }
-    } else if (cond.type === 'craft') {
-      done = state.ownedTools.length >= cond.amount;
-    }
+    let done = false;
+    if (cond.type === 'resource') done = (state.resources[cond.target as ResourceId] || 0) >= cond.amount;
+    else if (cond.type === 'skill_level') done = (state.skills[cond.target as SkillId]?.level || 0) >= cond.amount;
+    else if (cond.type === 'building') done = (state.buildings.find(b => b.id === cond.target)?.count || 0) >= cond.amount;
+    else if (cond.type === 'tech') done = cond.target === 'any'
+      ? state.unlockedTechs.length >= cond.amount
+      : state.unlockedTechs.includes(cond.target);
+    else if (cond.type === 'craft') done = state.ownedTools.length >= cond.amount;
     if (done) {
       state.completedObjectives.push(obj.id);
       addLog(state, `🎯 Objetivo completado: ${obj.name}`);
-      if (obj.reward?.knowledge) {
-        addResource(state, 'conocimiento', obj.reward.knowledge);
-      }
+      if (obj.reward?.knowledge) addResource(state, 'conocimiento', obj.reward.knowledge);
     }
   }
 }
 
 export function resetGame(): GameState {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
   return createInitialState();
 }
