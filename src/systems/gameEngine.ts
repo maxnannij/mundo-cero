@@ -1,5 +1,5 @@
 import {
-  type GameState, type AutomationMode, type Resident,
+  type GameState, type AutomationOrder, type AutomationMode, type Resident,
   createInitialState, addResource, removeResource, addXp, addLog,
   getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
   getAvailableWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
@@ -233,7 +233,7 @@ function completeActivityAction(state: GameState, act: ActivityDef): boolean {
   const skillBonuses = getSkillBonuses(state, act.skillId);
   const yieldMult = (toolBonuses.yieldMult || 1) * skillBonuses.yieldMult;
   for (const out of act.outputs) {
-    const chance = Math.min(1, Math.max(0, (out.chance ?? 1) + bonuses.specialChance));
+    const chance = Math.min(1, Math.max(0, (out.chance ?? 1) + toolBonuses.specialChance));
     if (Math.random() <= chance) {
       const rawAmount = out.amount * yieldMult;
       let amount = Math.floor(rawAmount);
