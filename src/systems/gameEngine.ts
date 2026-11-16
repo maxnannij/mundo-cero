@@ -3,7 +3,7 @@ import {
   createInitialState, addResource, removeResource, addXp, addLog,
   getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
   getAvailableWorkers, getAssignedWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
-  OLDEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
+  PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
 import { RECIPES, type RecipeDef } from '../data/recipes';
@@ -15,8 +15,9 @@ import { GAME_DAY_MS, DAYS_PER_YEAR, getCalendarInfo, type SeasonId } from '../d
 import type { ResourceId } from '../data/resources';
 
 const MAX_SIMULATION_MS = 8 * 60 * 60 * 1000;
-const FOOD_PER_ADULT_DAY = 0.6;
-const FOOD_PER_CHILD_DAY = 0.35;
+const BERRIES_PER_PERSON_DAY = 20;
+const COOKED_FOOD_PER_PERSON_DAY = 3;
+const BERRY_EQUIVALENT_PER_COOKED_FOOD = BERRIES_PER_PERSON_DAY / COOKED_FOOD_PER_PERSON_DAY;
 const PREGNANCY_DAYS = 280;
 const CONCEPTION_DAYS = 45;
 
@@ -27,7 +28,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function normalizeSave(value: unknown): GameState | null {
   if (!isRecord(value) || !isRecord(value.resources) || !isRecord(value.skills)) return null;
   const initial = createInitialState();
-  const raw = value as Partial<GameState>;
+  const raw = value as Partial<GameState> & { activeActivity?: ActiveActivity | null };
   const resources = { ...initial.resources };
   for (const id of Object.keys(resources) as ResourceId[]) {
     const amount = raw.resources?.[id];
@@ -83,6 +84,24 @@ function normalizeSave(value: unknown): GameState | null {
       }
     : initial.calendar;
 
+  const savedActivities: Partial<ActiveActivity>[] = Array.isArray(raw.activeActivities)
+    ? raw.activeActivities
+    : raw.activeActivity ? [raw.activeActivity] : [];
+  const activeActivities: ActiveActivity[] = savedActivities
+    .filter(activity => !!activity && typeof activity.skillId === 'string'
+      && !!SKILLS[activity.skillId as SkillId]?.activities.some(def => def.id === activity.activityId))
+    .map((activity, index) => ({
+      id: typeof activity.id === 'string' && activity.id
+        ? activity.id : `activity-${index}-${Number(activity.startTime) || Date.now()}`,
+      skillId: activity.skillId as SkillId,
+      activityId: activity.activityId as string,
+      startTime: Number(activity.startTime) || Date.now(),
+      progressMs: Math.max(0, Number(activity.progressMs) || 0),
+      targetAmount: Number.isFinite(Number(activity.targetAmount)) && Number(activity.targetAmount) > 0
+        ? Math.max(1, Math.floor(Number(activity.targetAmount))) : undefined,
+      actionsDone: Math.max(0, Math.floor(Number(activity.actionsDone) || 0)),
+    }));
+
   const normalized: GameState = {
     ...initial, ...raw, version: SAVE_VERSION,
     lastSave: Number(raw.lastSave) || Date.now(),
@@ -91,7 +110,7 @@ function normalizeSave(value: unknown): GameState | null {
     unlockedTechs: Array.isArray(raw.unlockedTechs) ? raw.unlockedTechs.filter(x => typeof x === 'string' && !!TECHS[x]) : [],
     equippedTools: isRecord(raw.equippedTools) ? raw.equippedTools as Record<string, string> : {},
     ownedTools: Array.isArray(raw.ownedTools) ? raw.ownedTools.filter(x => typeof x === 'string' && !!TOOLS[x]) : [],
-    activeActivity: raw.activeActivity && typeof raw.activeActivity.activityId === 'string' ? raw.activeActivity : null,
+    activeActivities,
     craftQueue: Array.isArray(raw.craftQueue) ? raw.craftQueue.filter(x => x && typeof x.recipeId === 'string' && !!RECIPES[x.recipeId]).map(x => ({
       recipeId: x.recipeId, remaining: Math.max(1, Math.floor(Number(x.remaining) || 1)),
       progressMs: Math.max(0, Number(x.progressMs) || 0), startTime: Number(x.startTime) || Date.now(),
@@ -110,17 +129,18 @@ function normalizeSave(value: unknown): GameState | null {
   // Drop staffing assignments that exceed the current adult workforce.
   const livingAdults = population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
   if (normalized.activeActivity && livingAdults < 1) normalized.activeActivity = null;
-  let staffRemaining = Math.max(0, livingAdults - (normalized.activeActivity ? 1 : 0));
+  let staffRemaining = livingAdults;
   for (const b of normalized.buildings) {
     b.workersAssigned = Math.min(b.workersAssigned, staffRemaining, (BUILDINGS[b.id]?.workersRequired ?? 1) * b.count);
     staffRemaining -= b.workersAssigned;
   }
+  normalized.activeActivities = normalized.activeActivities.slice(0, Math.max(0, livingAdults - getAssignedWorkers(normalized)));
   return normalized;
 }
 
 export function loadGame(): GameState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
     if (!raw) return createInitialState();
     const parsed = normalizeSave(JSON.parse(raw) as unknown);
     if (!parsed) throw new Error('La partida guardada no tiene una estructura válida.');
@@ -128,7 +148,7 @@ export function loadGame(): GameState {
   } catch (error) {
     console.error('No se pudo cargar la partida guardada.', error);
     try {
-      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
       if (raw) localStorage.setItem(`mundo-cero-backup-corrupto-${Date.now()}`, raw);
     } catch { /* Storage may be unavailable or full. */ }
     return createInitialState();
@@ -708,6 +728,7 @@ function checkObjectives(state: GameState): void {
 export function resetGame(): GameState {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
+  localStorage.removeItem(PREVIOUS_STORAGE_KEY);
   localStorage.removeItem(OLDEST_STORAGE_KEY);
   return createInitialState();
 }
