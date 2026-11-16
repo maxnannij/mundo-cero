@@ -214,7 +214,8 @@ function isSeasonAvailable(activity: ActivityDef, season: SeasonId): boolean {
 
 export function startActivity(state: GameState, skillId: SkillId, activityId: string, targetAmount?: number): boolean {
   const act = getActivity(skillId, activityId);
-  if (!act || !state.skills[skillId] || state.activeActivity) return false;
+  if (!act || !state.skills[skillId]) return false;
+  if (state.activeActivities.some(task => task.skillId === skillId && task.activityId === activityId)) return false;
   if (getAvailableWorkers(state) < 1) return false;
   if (state.skills[skillId].level < act.requiredLevel) return false;
   if (act.unlockTech && !isTechUnlocked(state, act.unlockTech)) return false;
@@ -222,36 +223,36 @@ export function startActivity(state: GameState, skillId: SkillId, activityId: st
   if (!isSeasonAvailable(act, getCalendarInfo(state.calendar).season)) return false;
   if (targetAmount !== undefined && (!Number.isFinite(targetAmount) || targetAmount < 1)) return false;
 
-  state.activeActivity = {
+  const task: ActiveActivity = {
+    id: `activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     skillId, activityId, startTime: Date.now(), progressMs: 0,
     targetAmount: targetAmount ? Math.floor(targetAmount) : undefined, actionsDone: 0,
   };
-  addLog(state, `Comenzaste: ${act.name}`);
+  state.activeActivities.push(task);
+  addLog(state, `Comenzaste: ${act.name}. Tareas manuales activas: ${state.activeActivities.length}.`);
   return true;
 }
 
-export function stopActivity(state: GameState): void {
-  if (state.activeActivity) {
-    addLog(state, 'Actividad detenida.');
-    state.activeActivity = null;
-  }
+export function stopActivity(state: GameState, activityInstanceId: string): void {
+  const task = state.activeActivities.find(activity => activity.id === activityInstanceId);
+  if (!task) return;
+  const act = getActivity(task.skillId, task.activityId);
+  state.activeActivities = state.activeActivities.filter(activity => activity.id !== activityInstanceId);
+  addLog(state, `Actividad detenida: ${act?.name || task.activityId}. El trabajador quedó libre.`);
 }
 
-function completeActivityAction(state: GameState, act: ActivityDef): boolean {
+function completeActivityAction(state: GameState, act: ActivityDef, active: ActiveActivity): boolean {
   const season = getCalendarInfo(state.calendar).season;
   if (!isSeasonAvailable(act, season)) {
-    addLog(state, `${act.name} no está disponible durante el invierno/esta estación.`);
-    state.activeActivity = null;
+    addLog(state, `${act.name} no está disponible durante ${season}.`);
     return false;
   }
   if (act.requiredBuilding && !hasBuilding(state, act.requiredBuilding)) {
     addLog(state, `Necesitás construir ${BUILDINGS[act.requiredBuilding]?.name || act.requiredBuilding} para continuar.`);
-    state.activeActivity = null;
     return false;
   }
   if (act.inputs?.length && !canAfford(state, act.inputs)) {
     addLog(state, `Faltan materiales para continuar: ${act.inputs.map(i => `${i.amount} ${i.resourceId}`).join(', ')}.`);
-    state.activeActivity = null;
     return false;
   }
   for (const input of act.inputs ?? []) removeResource(state, input.resourceId, input.amount);
@@ -269,10 +270,8 @@ function completeActivityAction(state: GameState, act: ActivityDef): boolean {
   }
   for (const message of addXp(state, act.skillId, act.xp)) addLog(state, message);
   for (const message of addMasteryXp(state, act.skillId, act.xp)) addLog(state, message);
-  if (state.activeActivity) {
-    state.activeActivity.actionsDone += 1;
-    state.totalActions[act.id] = (state.totalActions[act.id] || 0) + 1;
-  }
+  active.actionsDone += 1;
+  state.totalActions[act.id] = (state.totalActions[act.id] || 0) + 1;
   checkObjectives(state);
   return true;
 }
@@ -397,44 +396,53 @@ function processContinuousSystems(state: GameState, deltaMs: number): void {
   const passive = calculatePassiveProduction(state, deltaMs);
   for (const [id, amount] of Object.entries(passive)) addResource(state, id as ResourceId, amount);
 
-  if (state.activeActivity) {
-    const active = state.activeActivity;
+  for (const snapshot of [...state.activeActivities]) {
+    let active = state.activeActivities.find(task => task.id === snapshot.id);
+    if (!active) continue;
     const act = getActivity(active.skillId, active.activityId);
-    if (!act) state.activeActivity = null;
-    else {
-      const toolSpeed = getToolBonuses(state, act.requiredTool || 'ninguna').speedMult || 1;
-      const skillSpeed = getSkillBonuses(state, act.skillId).speedMult;
-      const duration = Math.max(100, act.durationMs * toolSpeed * skillSpeed);
-      active.progressMs += deltaMs;
-      let actions = 0;
-      while (state.activeActivity && state.activeActivity.progressMs >= duration && actions++ < 20_000) {
-        if (!completeActivityAction(state, act)) break;
-        const current = state.activeActivity;
-        if (!current) break;
-        current.progressMs -= duration;
-        if (current.targetAmount && current.actionsDone >= current.targetAmount) {
-          addLog(state, `Objetivo alcanzado (${current.targetAmount} acciones). Actividad detenida.`);
-          state.activeActivity = null;
-          break;
-        }
+    if (!act) {
+      state.activeActivities = state.activeActivities.filter(task => task.id !== snapshot.id);
+      continue;
+    }
+    const toolSpeed = getToolBonuses(state, act.requiredTool || 'ninguna').speedMult || 1;
+    const skillSpeed = getSkillBonuses(state, act.skillId).speedMult;
+    const duration = Math.max(100, act.durationMs * toolSpeed * skillSpeed);
+    active.progressMs += deltaMs;
+    let actions = 0;
+    while (actions++ < 20_000) {
+      active = state.activeActivities.find(task => task.id === snapshot.id);
+      if (!active || active.progressMs < duration) break;
+      if (!completeActivityAction(state, act, active)) {
+        state.activeActivities = state.activeActivities.filter(task => task.id !== snapshot.id);
+        break;
+      }
+      active = state.activeActivities.find(task => task.id === snapshot.id);
+      if (!active) break;
+      active.progressMs -= duration;
+      if (active.targetAmount && active.actionsDone >= active.targetAmount) {
+        addLog(state, `Objetivo alcanzado para ${act.name} (${active.targetAmount} acciones). El trabajador quedó libre.`);
+        state.activeActivities = state.activeActivities.filter(task => task.id !== snapshot.id);
+        break;
       }
     }
   }
-
   processCrafting(state, deltaMs);
   processAutomations(state);
 }
 
 function consumeDailyFood(state: GameState): boolean {
-  const residents = state.population.residents;
-  const needed = residents.reduce((sum, r) => sum + (r.ageDays >= ADULT_AGE_DAYS ? FOOD_PER_ADULT_DAY : FOOD_PER_CHILD_DAY), 0);
-  if (needed <= 0) return true;
-  const cookedRations = Math.min(needed, (state.resources.comida_cocida || 0) * 2);
-  if (cookedRations > 0) removeResource(state, 'comida_cocida', cookedRations / 2);
-  const remaining = Math.max(0, needed - cookedRations);
-  const berriesUsed = Math.min(remaining, state.resources.bayas || 0);
+  const people = state.population.residents.length;
+  if (people === 0) return true;
+  // 3 unidades de comida cocida equivalen a 20 bayas por persona.
+  // Primero se consumen las comidas cocidas; las bayas completan la ración.
+  const neededBerryEquivalent = people * BERRIES_PER_PERSON_DAY;
+  const cookedUsed = Math.min(Math.max(0, state.resources.comida_cocida || 0), people * COOKED_FOOD_PER_PERSON_DAY);
+  if (cookedUsed > 0) removeResource(state, 'comida_cocida', cookedUsed);
+  const berryEquivalentCovered = cookedUsed * BERRY_EQUIVALENT_PER_COOKED_FOOD;
+  const berriesNeeded = Math.max(0, neededBerryEquivalent - berryEquivalentCovered);
+  const berriesUsed = Math.min(berriesNeeded, Math.max(0, state.resources.bayas || 0));
   if (berriesUsed > 0) removeResource(state, 'bayas', berriesUsed);
-  return remaining - berriesUsed <= 1e-6;
+  return berriesNeeded - berriesUsed <= 1e-6;
 }
 
 function consumeDailyHeating(state: GameState, season: SeasonId): boolean {
@@ -539,11 +547,16 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
 
     // Ajustar la fuerza de trabajo cuando alguien fallece.
     const livingAdults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
-    if (state.activeActivity && livingAdults <= getAssignedWorkers(state)) {
-      addLog(state, 'La actividad se detuvo porque ya no queda un trabajador libre.');
-      state.activeActivity = null;
+    const maxActiveTasks = Math.max(0, livingAdults - getAssignedWorkers(state));
+    if (state.activeActivities.length > maxActiveTasks) {
+      const stopped = state.activeActivities.slice(maxActiveTasks);
+      for (const task of stopped) {
+        const act = getActivity(task.skillId, task.activityId);
+        addLog(state, `Se detuvo ${act?.name || task.activityId} porque ya no hay suficientes trabajadores.`);
+      }
+      state.activeActivities = state.activeActivities.slice(0, maxActiveTasks);
     }
-    let remainingStaff = livingAdults;
+    let remainingStaff = Math.max(0, livingAdults - state.activeActivities.length);
     for (const building of state.buildings) {
       const previousStaff = building.workersAssigned;
       building.workersAssigned = Math.min(previousStaff, remainingStaff);
@@ -591,11 +604,11 @@ function processDailySystems(state: GameState, previousSeason: SeasonId): void {
     if (info.season === 'invierno') addLog(state, 'El invierno llegó: las bayas silvestres dejan de crecer y la población necesita leña para calentarse.');
   }
   processDailyPopulation(state, info.season);
-  if (state.activeActivity) {
-    const act = getActivity(state.activeActivity.skillId, state.activeActivity.activityId);
+  for (const task of [...state.activeActivities]) {
+    const act = getActivity(task.skillId, task.activityId);
     if (act && !isSeasonAvailable(act, info.season)) {
-      addLog(state, `${act.name} se detuvo: no está disponible durante ${info.season}.`);
-      state.activeActivity = null;
+      addLog(state, `${act.name} se detuvo: no está disponible durante ${info.season}. El trabajador quedó libre.`);
+      state.activeActivities = state.activeActivities.filter(item => item.id !== task.id);
     }
   }
 }
