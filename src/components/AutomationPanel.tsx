@@ -21,7 +21,7 @@ export function AutomationPanel() {
     state.skills[r.skillId]?.level >= r.requiredLevel &&
     (!r.requiredTech || isTechUnlocked(state, r.requiredTech)) &&
     r.outputs.some(o => o.resourceId !== 'tool') &&
-    (!r.requiredBuilding || r.requiredBuilding === selectedFacility),
+    (r.requiredBuilding || 'taller') === selectedFacility,
   );
 
   return (
