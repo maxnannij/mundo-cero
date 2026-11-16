@@ -1,4 +1,5 @@
 import type { ResourceId } from './resources';
+import type { SeasonId } from './calendar';
 
 export interface BuildingDef {
   id: string;
@@ -9,9 +10,11 @@ export interface BuildingDef {
   baseCost: { resourceId: ResourceId; amount: number }[];
   costScale: number;
   requiredTech?: string;
+  workersRequired?: number;
   production?: {
     resourceId: ResourceId;
     amountPerMinute: number;
+    seasonMultipliers?: Partial<Record<SeasonId, number>>;
   }[];
   storageBonus?: number;
   effects?: string[];
@@ -82,6 +85,7 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     ],
     costScale: 1.65,
     requiredTech: 'aserradero',
+    workersRequired: 1,
     production: [{ resourceId: 'madera', amountPerMinute: 2 }],
     upgradeCostMult: 1.85,
     maxLevel: 8,
@@ -99,6 +103,7 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     ],
     costScale: 1.65,
     requiredTech: 'cantera',
+    workersRequired: 1,
     production: [{ resourceId: 'piedra', amountPerMinute: 1.5 }],
     upgradeCostMult: 1.85,
     maxLevel: 8,
@@ -117,9 +122,10 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     ],
     costScale: 1.6,
     requiredTech: 'agricultura',
+    workersRequired: 1,
     production: [
-      { resourceId: 'bayas', amountPerMinute: 1.2 },
-      { resourceId: 'fibra', amountPerMinute: 0.6 },
+      { resourceId: 'bayas', amountPerMinute: 1.2, seasonMultipliers: { primavera: 1.2, verano: 1.1, otono: 0.65, invierno: 0 } },
+      { resourceId: 'fibra', amountPerMinute: 0.6, seasonMultipliers: { primavera: 1.1, verano: 1, otono: 0.8, invierno: 0.35 } },
     ],
     upgradeCostMult: 1.8,
     maxLevel: 6,
