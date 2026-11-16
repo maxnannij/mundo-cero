@@ -2,8 +2,8 @@ import {
   type GameState, type AutomationOrder, type AutomationMode, type Resident,
   createInitialState, addResource, removeResource, addXp, addLog,
   getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
-  getAvailableWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
-  ADULT_AGE_DAYS, MAX_POPULATION,
+  getAvailableWorkers, getAssignedWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
+  OLDEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
 import { RECIPES, type RecipeDef } from '../data/recipes';
@@ -54,6 +54,8 @@ function normalizeSave(value: unknown): GameState | null {
           health: Math.max(0, Math.min(100, Number(r.health) || 0)),
           hungerDays: Math.max(0, Number(r.hungerDays) || 0),
           coldDays: Math.max(0, Number(r.coldDays) || 0),
+          lifeExpectancyYears: Number.isFinite(r.lifeExpectancyYears) && Number(r.lifeExpectancyYears) >= 70 && Number(r.lifeExpectancyYears) <= 110
+            ? Number(r.lifeExpectancyYears) : generateLifeExpectancyYears(),
         })) as Resident[],
         nextResidentId: Math.max(3, Math.floor(Number(raw.population.nextResidentId) || 3)),
         births: Math.max(0, Math.floor(Number(raw.population.births) || 0)),
@@ -105,7 +107,9 @@ function normalizeSave(value: unknown): GameState | null {
   };
 
   // Drop staffing assignments that exceed the current adult workforce.
-  let staffRemaining = population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
+  const livingAdults = population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
+  if (normalized.activeActivity && livingAdults < 1) normalized.activeActivity = null;
+  let staffRemaining = Math.max(0, livingAdults - (normalized.activeActivity ? 1 : 0));
   for (const b of normalized.buildings) {
     b.workersAssigned = Math.min(b.workersAssigned, staffRemaining, (BUILDINGS[b.id]?.workersRequired ?? 1) * b.count);
     staffRemaining -= b.workersAssigned;
@@ -115,7 +119,7 @@ function normalizeSave(value: unknown): GameState | null {
 
 export function loadGame(): GameState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
     if (!raw) return createInitialState();
     const parsed = normalizeSave(JSON.parse(raw) as unknown);
     if (!parsed) throw new Error('La partida guardada no tiene una estructura válida.');
@@ -123,7 +127,7 @@ export function loadGame(): GameState {
   } catch (error) {
     console.error('No se pudo cargar la partida guardada.', error);
     try {
-      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY);
       if (raw) localStorage.setItem(`mundo-cero-backup-corrupto-${Date.now()}`, raw);
     } catch { /* Storage may be unavailable or full. */ }
     return createInitialState();
@@ -189,7 +193,8 @@ function isSeasonAvailable(activity: ActivityDef, season: SeasonId): boolean {
 
 export function startActivity(state: GameState, skillId: SkillId, activityId: string, targetAmount?: number): boolean {
   const act = getActivity(skillId, activityId);
-  if (!act || !state.skills[skillId]) return false;
+  if (!act || !state.skills[skillId] || state.activeActivity) return false;
+  if (getAvailableWorkers(state) < 1) return false;
   if (state.skills[skillId].level < act.requiredLevel) return false;
   if (act.unlockTech && !isTechUnlocked(state, act.unlockTech)) return false;
   if (act.requiredBuilding && !hasBuilding(state, act.requiredBuilding)) return false;
@@ -432,6 +437,7 @@ function addNewborn(state: GameState, mother: Resident, father: Resident): void 
   const name = CHILD_NAMES[(state.population.nextResidentId + state.population.births) % CHILD_NAMES.length];
   state.population.residents.push({
     id, name, sex, ageDays: 0, health: 100, hungerDays: 0, coldDays: 0,
+    lifeExpectancyYears: generateLifeExpectancyYears(),
     parents: [mother.id, father.id], pregnancyDaysRemaining: 0,
     conceptionProgressDays: 0, childrenBorn: 0,
   });
@@ -475,18 +481,56 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
       resident.health = Math.min(100, resident.health + 1.5);
     } else {
       resident.hungerDays += 1;
-      resident.health = Math.max(20, resident.health - 3);
+      resident.health = Math.max(0, resident.health - 20);
       if (resident.hungerDays === 1 || resident.hungerDays % 5 === 0) addLog(state, `${resident.name} tiene hambre. Conseguí alimentos para el asentamiento.`);
     }
     if (season === 'invierno' && !warm) {
       resident.coldDays += 1;
-      resident.health = Math.max(20, resident.health - 2);
+      resident.health = Math.max(0, resident.health - 2);
       if (resident.coldDays === 1 || resident.coldDays % 5 === 0) addLog(state, `${resident.name} está pasando frío. Hace falta madera para calefaccionar.`);
     } else {
       resident.coldDays = 0;
       if (fed) resident.health = Math.min(100, resident.health + 0.5);
     }
     resident.ageDays += 1;
+  }
+
+  // La longevidad varía por persona; la media de la distribución es de 90 años.
+  const deceased = state.population.residents.filter(resident =>
+    resident.health <= 0 || resident.ageDays >= (resident.lifeExpectancyYears || 90) * DAYS_PER_YEAR
+  );
+  if (deceased.length > 0) {
+    const deceasedIds = new Set(deceased.map(resident => resident.id));
+    for (const resident of deceased) {
+      const oldAge = resident.ageDays >= (resident.lifeExpectancyYears || 90) * DAYS_PER_YEAR;
+      addLog(state, oldAge
+        ? `${resident.name} falleció por causas naturales a los ${Math.floor(resident.ageDays / DAYS_PER_YEAR)} años.`
+        : `${resident.name} falleció por falta de alimentos o condiciones de salud.`);
+    }
+    state.population.residents = state.population.residents.filter(resident => !deceasedIds.has(resident.id));
+    for (const resident of state.population.residents) {
+      if (resident.partnerId && deceasedIds.has(resident.partnerId)) {
+        resident.partnerId = undefined;
+        resident.pregnancyDaysRemaining = 0;
+        resident.conceptionProgressDays = 0;
+      }
+    }
+
+    // Ajustar la fuerza de trabajo cuando alguien fallece.
+    const livingAdults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
+    if (state.activeActivity && livingAdults <= getAssignedWorkers(state)) {
+      addLog(state, 'La actividad se detuvo porque ya no queda un trabajador libre.');
+      state.activeActivity = null;
+    }
+    let remainingStaff = livingAdults;
+    for (const building of state.buildings) {
+      const previousStaff = building.workersAssigned;
+      building.workersAssigned = Math.min(previousStaff, remainingStaff);
+      remainingStaff -= building.workersAssigned;
+      if (building.workersAssigned < previousStaff) {
+        addLog(state, `Se redujo el personal de ${BUILDINGS[building.id]?.name || building.id} por falta de adultos.`);
+      }
+    }
   }
 
   // When children become adults, pair unrelated, healthy residents automatically.
