@@ -55,7 +55,8 @@ function normalizeSave(value: unknown): GameState | null {
           hungerDays: Math.max(0, Number(r.hungerDays) || 0),
           coldDays: Math.max(0, Number(r.coldDays) || 0),
           lifeExpectancyYears: Number.isFinite(r.lifeExpectancyYears) && Number(r.lifeExpectancyYears) >= 70 && Number(r.lifeExpectancyYears) <= 110
-            ? Number(r.lifeExpectancyYears) : generateLifeExpectancyYears(),
+            ? Number(r.lifeExpectancyYears)
+            : Math.max(Math.max(0, Number(r.ageDays) || 0) / DAYS_PER_YEAR + 1, generateLifeExpectancyYears()),
         })) as Resident[],
         nextResidentId: Math.max(3, Math.floor(Number(raw.population.nextResidentId) || 3)),
         births: Math.max(0, Math.floor(Number(raw.population.births) || 0)),
