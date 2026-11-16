@@ -196,7 +196,7 @@ export const SKILLS: Record<SkillId, SkillDef> = {
         seasonsAvailable: ['primavera', 'verano', 'otono'],
         durationMs: 4000,
         xp: 8,
-        outputs: [{ resourceId: 'bayas', amount: 1 }],
+        outputs: [{ resourceId: 'bayas', amount: 2 }],
       },
       {
         id: 'rec_arcilla',
