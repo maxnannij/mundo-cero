@@ -552,6 +552,12 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
       const lostTool = resident.equipment?.tool;
       if (lostTool && TOOLS[lostTool]) {
         state.toolInventory[lostTool] = (state.toolInventory[lostTool] || 0) + 1;
+        const category = TOOLS[lostTool].category;
+        if (state.equippedTools[category] === lostTool) {
+          const replacement = state.population.residents.find(r => !deceasedIds.has(r.id) && r.equipment?.tool && TOOLS[r.equipment.tool]?.category === category)?.equipment?.tool;
+          if (replacement) state.equippedTools[category] = replacement;
+          else delete state.equippedTools[category];
+        }
         addLog(state, `${TOOLS[lostTool].name} de ${resident.name} volvió al inventario del asentamiento.`);
       }
       const oldAge = resident.ageDays >= (resident.lifeExpectancyYears || 90) * DAYS_PER_YEAR;
