@@ -283,6 +283,7 @@ function finishCraft(state: GameState, recipe: RecipeDef): void {
 function canUseRecipe(state: GameState, recipe: RecipeDef): boolean {
   if (!state.skills[recipe.skillId] || state.skills[recipe.skillId].level < recipe.requiredLevel) return false;
   if (recipe.requiredTech && !isTechUnlocked(state, recipe.requiredTech)) return false;
+  if (recipe.requiredBuilding && !hasBuilding(state, recipe.requiredBuilding)) return false;
   return true;
 }
 
@@ -313,6 +314,7 @@ export function createAutomationOrder(
 ): boolean {
   const recipe = RECIPES[recipeId];
   if (!recipe || !hasBuilding(state, buildingId) || !canUseRecipe(state, recipe)) return false;
+  if (recipe.requiredBuilding && recipe.requiredBuilding !== buildingId) return false;
   if (state.automationOrders.some(o => o.recipeId === recipeId && o.buildingId === buildingId)) return false;
   const output = recipe.outputs.find(o => o.resourceId !== 'tool');
   if (mode === 'mantener' && (!output || !Number.isFinite(targetAmount) || targetAmount < 1)) return false;
@@ -449,7 +451,7 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
   if (!state.population.reproductionEnabled || state.population.residents.length >= MAX_POPULATION || !hasBuilding(state, 'refugio') || !fed || !warm) return;
   const mothers = state.population.residents.filter(r =>
     r.sex === 'mujer' && r.ageDays >= ADULT_AGE_DAYS && r.ageDays <= 40 * 360 &&
-    (r.pregnancyDaysRemaining || 0) === 0 && (r.childrenBorn || 0) < 4 && r.health >= 70
+    r.health >= 70
   );
   for (const mother of mothers) {
     if (mother.pregnancyDaysRemaining && mother.pregnancyDaysRemaining > 0) {
@@ -461,13 +463,14 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
       }
       continue;
     }
+    if ((mother.childrenBorn || 0) >= 4) continue;
     const father = state.population.residents.find(r => r.id === mother.partnerId && r.sex === 'hombre' && r.ageDays >= ADULT_AGE_DAYS && r.health >= 70);
     if (!father) continue;
     mother.conceptionProgressDays = (mother.conceptionProgressDays || 0) + 1;
     if (mother.conceptionProgressDays >= CONCEPTION_DAYS) {
       mother.pregnancyDaysRemaining = PREGNANCY_DAYS;
       mother.conceptionProgressDays = 0;
-      addLog(state, `Aren y Lira esperan un nuevo integrante para la comunidad. Tiempo estimado: ${PREGNANCY_DAYS} días.`);
+      addLog(state, `${mother.name} y ${father.name} esperan un nuevo integrante para la comunidad. Tiempo estimado: ${PREGNANCY_DAYS} días.`);
     }
   }
 }
