@@ -171,3 +171,5 @@ export function addLog(state: GameState, message: string): void {
   state.log.unshift({ time: Date.now(), message });
   if (state.log.length > 50) state.log.length = 50;
 }
+
+// Branch update check
