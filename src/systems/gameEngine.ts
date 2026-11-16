@@ -214,7 +214,6 @@ function isSeasonAvailable(activity: ActivityDef, season: SeasonId): boolean {
 export function startActivity(state: GameState, skillId: SkillId, activityId: string, targetAmount?: number): boolean {
   const act = getActivity(skillId, activityId);
   if (!act || !state.skills[skillId]) return false;
-  if (state.activeActivities.some(task => task.skillId === skillId && task.activityId === activityId)) return false;
   if (getAvailableWorkers(state) < 1) return false;
   if (state.skills[skillId].level < act.requiredLevel) return false;
   if (act.unlockTech && !isTechUnlocked(state, act.unlockTech)) return false;
