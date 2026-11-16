@@ -5,9 +5,10 @@ import { isTechUnlocked, hasBuilding } from '../store/gameState';
 import { TOOLS } from '../data/tools';
 import { RESOURCES } from '../data/resources';
 import { getCalendarInfo } from '../data/calendar';
+import { masteryXpForNext } from '../store/gameState';
 
 export function SkillsPanel() {
-  const { state, startAct, stopAct, doEquip } = useGame();
+  const { state, startAct, stopAct, doEquip, doChooseSpecialization } = useGame();
   const [selectedSkill, setSelectedSkill] = useState<SkillId>('tala');
   const [target, setTarget] = useState<string>('');
   const skill = SKILLS[selectedSkill];
@@ -42,6 +43,30 @@ export function SkillsPanel() {
           <div className="xp-bar-container">
             <div className="xp-bar" style={{ width: xpPct + '%' }} />
             <span className="xp-text">{Math.floor(skillState.xp)} / {xpNeeded} XP · Nivel {skillState.level}</span>
+          </div>
+          <div className="mastery-card">
+            <div className="mastery-heading">
+              <strong>Maestría {skillState.masteryLevel}/20</strong>
+              <span>{Math.floor(skillState.masteryXp)} / {masteryXpForNext(skillState.masteryLevel)} XP</span>
+            </div>
+            <div className="progress-bar"><div className="progress-fill" style={{ width: Math.min(100, skillState.masteryXp / masteryXpForNext(skillState.masteryLevel) * 100) + '%' }} /></div>
+            <small>La maestría mejora el rendimiento de esta habilidad. Cada nivel otorga +1,5% de producción.</small>
+            <div className="mastery-bonuses">
+              <span>{skillState.level >= 10 ? '✓ +5% rendimiento por nivel 10' : 'Nivel 10: +5% rendimiento'}</span>
+              <span>{skillState.level >= 20 ? '✓ +5% velocidad por nivel 20' : 'Nivel 20: +5% velocidad'}</span>
+              <span>{skillState.level >= 40 ? '✓ +5% rendimiento por nivel 40' : 'Nivel 40: +5% rendimiento'}</span>
+            </div>
+            {skillState.specialization ? (
+              <p className="good-text">Especialización: {skillState.specialization === 'velocidad' ? '⚡ Velocidad (-15% duración)' : '📦 Rendimiento (+20% producción)'}</p>
+            ) : skillState.level >= 25 ? (
+              <div className="specialization-picker">
+                <strong>Elegí una especialización permanente</strong>
+                <button className="btn" onClick={() => doChooseSpecialization(selectedSkill, 'velocidad')}>⚡ Velocidad · Acciones 15% más rápidas</button>
+                <button className="btn" onClick={() => doChooseSpecialization(selectedSkill, 'rendimiento')}>📦 Rendimiento · +20% recursos</button>
+              </div>
+            ) : (
+              <small>Al nivel 25 podrás elegir una especialización permanente.</small>
+            )}
           </div>
         </div>
 
