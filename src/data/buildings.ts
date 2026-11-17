@@ -23,6 +23,10 @@ export interface BuildingDef {
 }
 
 export const BUILDINGS: Record<string, BuildingDef> = {
+  pozo: {
+    id: 'pozo', name: 'Pozo de agua', description: 'Un pozo de piedra que permite extraer agua durante las estaciones templadas. Se congela en invierno.', icon: '🪣', maxCount: 1,
+    baseCost: [{ resourceId: 'piedra', amount: 20 }], costScale: 1, effects: ['Permite recoger agua', 'Se congela durante el invierno'], upgradeCostMult: 1, maxLevel: 1,
+  },
   refugio: {
     id: 'refugio',
     name: 'Refugio',
