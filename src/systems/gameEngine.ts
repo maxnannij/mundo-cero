@@ -12,15 +12,14 @@ import { TECHS } from '../data/techs';
 import { OBJECTIVES } from '../data/objectives';
 import { TOOLS } from '../data/tools';
 import { GAME_DAY_MS, DAYS_PER_YEAR, getCalendarInfo, type SeasonId } from '../data/calendar';
-import type { ResourceId } from '../data/resources';
+import { RESOURCES, type ResourceId } from '../data/resources';
 
 const MAX_SIMULATION_MS = 8 * 60 * 60 * 1000;
-const FOOD_VALUE: Partial<Record<ResourceId, number>> = {
-  plato_completo: 20,       // Una porción cubre un día-persona.
-  carne_cocinada: 10,       // Una porción cubre medio día-persona.
-  comida_cocida: 20 / 3,    // Conserva el balance de las recetas existentes.
-  bayas: 1,
-};
+const FOOD_VALUE: Partial<Record<ResourceId, number>> = Object.fromEntries(
+  Object.values(RESOURCES)
+    .filter(resource => resource.foodValue !== undefined)
+    .map(resource => [resource.id, resource.foodValue]),
+) as Partial<Record<ResourceId, number>>;
 const DAILY_FOOD_NEED = 20; // Equivalente a 20 bayas por habitante y día.
 const PREGNANCY_DAYS = 280;
 const CONCEPTION_DAYS = 45;
