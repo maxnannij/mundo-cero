@@ -644,3 +644,14 @@ body {
 .resident-equipment-slots { display: flex; flex-wrap: wrap; gap: .4rem .8rem; margin-top: .5rem; color: var(--muted); font-size: .72rem; }
 .resident-equipment-slots b { color: var(--text); font-weight: 500; }
 @media (max-width: 600px) { .resident-equipment { margin-left: 0; } .resident-equipment-row { align-items: stretch; flex-direction: column; } .resident-tool-select { width: 100%; } }
+
+
+/* Asignación individual de trabajo */
+.worker-assignment-card { display: flex; flex-direction: column; gap: .55rem; padding: .8rem; margin: .65rem 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); }
+.worker-assignment-heading { display: flex; justify-content: space-between; align-items: center; gap: .6rem; }
+.worker-assignment-heading small { color: var(--muted); }
+.assigned-resident-list { display: flex; flex-wrap: wrap; gap: .45rem; }
+.assigned-resident { display: inline-flex; align-items: center; gap: .45rem; padding: .25rem .4rem .25rem .65rem; border: 1px solid var(--border); border-radius: 999px; font-size: .8rem; }
+.assigned-resident .btn { padding: .2rem .5rem; font-size: .72rem; }
+.activity-worker-select { min-width: 150px; max-width: 210px; }
+@media (max-width: 600px) { .worker-assignment-heading { align-items: flex-start; flex-direction: column; } .activity-worker-select { width: 100%; max-width: none; } }

@@ -3,7 +3,7 @@ import type { GameState, AutomationMode } from './gameState';
 import {
   loadGame, saveGame, tick, processOffline, startActivity, stopActivity, queueCraft,
   buildBuilding, upgradeBuilding, researchTech, equipTool, resetGame, exportSave, importSave,
-  assignWorker, setReproduction, createAutomationOrder, toggleAutomationOrder, removeAutomationOrder, chooseSpecialization,
+  assignResidentToBuilding, unassignResidentFromBuilding, setReproduction, createAutomationOrder, toggleAutomationOrder, removeAutomationOrder, chooseSpecialization,
   equipResidentTool, unequipResidentTool,
 } from '../systems/gameEngine';
 import type { SkillId } from '../data/skills';
@@ -11,7 +11,7 @@ import type { SkillId } from '../data/skills';
 type Action =
   | { type: 'SET_STATE'; payload: GameState }
   | { type: 'TICK'; delta: number }
-  | { type: 'START_ACTIVITY'; skillId: SkillId; activityId: string; target?: number }
+  | { type: 'START_ACTIVITY'; skillId: SkillId; activityId: string; residentId: string; target?: number }
   | { type: 'STOP_ACTIVITY'; activityInstanceId: string }
   | { type: 'QUEUE_CRAFT'; recipeId: string; qty: number }
   | { type: 'BUILD'; buildingId: string }
@@ -20,7 +20,8 @@ type Action =
   | { type: 'EQUIP'; toolId: string }
   | { type: 'EQUIP_RESIDENT_TOOL'; residentId: string; toolId: string }
   | { type: 'UNEQUIP_RESIDENT_TOOL'; residentId: string }
-  | { type: 'ASSIGN_WORKER'; buildingId: string; delta: number }
+  | { type: 'ASSIGN_RESIDENT_BUILDING'; buildingId: string; residentId: string }
+  | { type: 'UNASSIGN_RESIDENT_BUILDING'; buildingId: string; residentId: string }
   | { type: 'SET_REPRODUCTION'; enabled: boolean }
   | { type: 'CHOOSE_SPECIALIZATION'; skillId: SkillId; specialization: 'velocidad' | 'rendimiento' }
   | { type: 'CREATE_AUTOMATION'; recipeId: string; buildingId: string; mode: AutomationMode; target: number }
@@ -39,7 +40,7 @@ function reducer(state: GameState, action: Action): GameState {
   const next = structuredClone(state);
   switch (action.type) {
     case 'TICK': tick(next, action.delta); break;
-    case 'START_ACTIVITY': startActivity(next, action.skillId, action.activityId, action.target); break;
+    case 'START_ACTIVITY': startActivity(next, action.skillId, action.activityId, action.residentId, action.target); break;
     case 'STOP_ACTIVITY': stopActivity(next, action.activityInstanceId); break;
     case 'QUEUE_CRAFT': queueCraft(next, action.recipeId, action.qty); break;
     case 'BUILD': buildBuilding(next, action.buildingId); break;
@@ -48,7 +49,8 @@ function reducer(state: GameState, action: Action): GameState {
     case 'EQUIP': equipTool(next, action.toolId); break;
     case 'EQUIP_RESIDENT_TOOL': equipResidentTool(next, action.residentId, action.toolId); break;
     case 'UNEQUIP_RESIDENT_TOOL': unequipResidentTool(next, action.residentId); break;
-    case 'ASSIGN_WORKER': assignWorker(next, action.buildingId, action.delta); break;
+    case 'ASSIGN_RESIDENT_BUILDING': assignResidentToBuilding(next, action.buildingId, action.residentId); break;
+    case 'UNASSIGN_RESIDENT_BUILDING': unassignResidentFromBuilding(next, action.buildingId, action.residentId); break;
     case 'SET_REPRODUCTION': setReproduction(next, action.enabled); break;
     case 'CHOOSE_SPECIALIZATION': chooseSpecialization(next, action.skillId, action.specialization); break;
     case 'CREATE_AUTOMATION': createAutomationOrder(next, action.recipeId, action.buildingId, action.mode, action.target); break;
@@ -62,7 +64,7 @@ function reducer(state: GameState, action: Action): GameState {
 interface GameContextValue {
   state: GameState;
   dispatch: React.Dispatch<Action>;
-  startAct: (skillId: SkillId, activityId: string, target?: number) => void;
+  startAct: (skillId: SkillId, activityId: string, residentId: string, target?: number) => void;
   stopAct: (activityInstanceId: string) => void;
   doCraft: (recipeId: string, qty: number) => void;
   doBuild: (id: string) => void;
@@ -71,7 +73,8 @@ interface GameContextValue {
   doEquip: (id: string) => void;
   doEquipResidentTool: (residentId: string, toolId: string) => void;
   doUnequipResidentTool: (residentId: string) => void;
-  doAssignWorker: (buildingId: string, delta: number) => void;
+  doAssignResidentToBuilding: (buildingId: string, residentId: string) => void;
+  doUnassignResidentFromBuilding: (buildingId: string, residentId: string) => void;
   doSetReproduction: (enabled: boolean) => void;
   doChooseSpecialization: (skillId: SkillId, specialization: 'velocidad' | 'rendimiento') => void;
   doCreateAutomation: (recipeId: string, buildingId: string, mode: AutomationMode, target: number) => void;
@@ -121,7 +124,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const startAct = useCallback((skillId: SkillId, activityId: string, target?: number) => dispatch({ type: 'START_ACTIVITY', skillId, activityId, target }), []);
+  const startAct = useCallback((skillId: SkillId, activityId: string, residentId: string, target?: number) => dispatch({ type: 'START_ACTIVITY', skillId, activityId, residentId, target }), []);
   const stopAct = useCallback((activityInstanceId: string) => dispatch({ type: 'STOP_ACTIVITY', activityInstanceId }), []);
   const doCraft = useCallback((recipeId: string, qty: number) => dispatch({ type: 'QUEUE_CRAFT', recipeId, qty }), []);
   const doBuild = useCallback((id: string) => dispatch({ type: 'BUILD', buildingId: id }), []);
@@ -130,7 +133,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const doEquip = useCallback((id: string) => dispatch({ type: 'EQUIP', toolId: id }), []);
   const doEquipResidentTool = useCallback((residentId: string, toolId: string) => dispatch({ type: 'EQUIP_RESIDENT_TOOL', residentId, toolId }), []);
   const doUnequipResidentTool = useCallback((residentId: string) => dispatch({ type: 'UNEQUIP_RESIDENT_TOOL', residentId }), []);
-  const doAssignWorker = useCallback((buildingId: string, delta: number) => dispatch({ type: 'ASSIGN_WORKER', buildingId, delta }), []);
+  const doAssignResidentToBuilding = useCallback((buildingId: string, residentId: string) => dispatch({ type: 'ASSIGN_RESIDENT_BUILDING', buildingId, residentId }), []);
+  const doUnassignResidentFromBuilding = useCallback((buildingId: string, residentId: string) => dispatch({ type: 'UNASSIGN_RESIDENT_BUILDING', buildingId, residentId }), []);
   const doSetReproduction = useCallback((enabled: boolean) => dispatch({ type: 'SET_REPRODUCTION', enabled }), []);
   const doChooseSpecialization = useCallback((skillId: SkillId, specialization: 'velocidad' | 'rendimiento') => dispatch({ type: 'CHOOSE_SPECIALIZATION', skillId, specialization }), []);
   const doCreateAutomation = useCallback((recipeId: string, buildingId: string, mode: AutomationMode, target: number) => dispatch({ type: 'CREATE_AUTOMATION', recipeId, buildingId, mode, target }), []);
@@ -157,7 +161,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   return (
     <GameContext.Provider value={{
       state, dispatch, startAct, stopAct, doCraft, doBuild, doUpgrade, doResearch, doEquip,
-      doEquipResidentTool, doUnequipResidentTool, doAssignWorker, doSetReproduction, doChooseSpecialization, doCreateAutomation, doToggleAutomation, doRemoveAutomation,
+      doEquipResidentTool, doUnequipResidentTool, doAssignResidentToBuilding, doUnassignResidentFromBuilding, doSetReproduction, doChooseSpecialization, doCreateAutomation, doToggleAutomation, doRemoveAutomation,
       doReset, doRestart, doExport, doImport, saveNow,
     }}>
       {children}
