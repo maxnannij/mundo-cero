@@ -2,7 +2,7 @@ import {
   type GameState, type ActiveActivity, type AutomationOrder, type AutomationMode, type Resident,
   createInitialState, addResource, removeResource, addXp, addLog,
   getResidentToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
-  getAvailableWorkers, getAssignedWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
+  getAvailableWorkers, getAvailableResidents, getAssignedWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
   PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, ANCIENT_STORAGE_KEY, OLDESTEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
@@ -600,25 +600,17 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
       }
     }
 
-    // Ajustar la fuerza de trabajo cuando alguien fallece.
-    const livingAdults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
-    const maxActiveTasks = Math.max(0, livingAdults - getAssignedWorkers(state));
-    if (state.activeActivities.length > maxActiveTasks) {
-      const stopped = state.activeActivities.slice(maxActiveTasks);
-      for (const task of stopped) {
-        const act = getActivity(task.skillId, task.activityId);
-        addLog(state, `Se detuvo ${act?.name || task.activityId} porque ya no hay suficientes trabajadores.`);
-      }
-      state.activeActivities = state.activeActivities.slice(0, maxActiveTasks);
+    // Liberar las tareas e instalaciones de quienes ya no forman parte de la comunidad.
+    for (const task of state.activeActivities.filter(task => deceasedIds.has(task.residentId))) {
+      const act = getActivity(task.skillId, task.activityId);
+      addLog(state, `Se detuvo ${act?.name || task.activityId}: ${deceased.find(r => r.id === task.residentId)?.name || 'El trabajador'} ya no puede continuar.`);
     }
-    let remainingStaff = Math.max(0, livingAdults - state.activeActivities.length);
+    state.activeActivities = state.activeActivities.filter(task => !deceasedIds.has(task.residentId));
     for (const building of state.buildings) {
-      const previousStaff = building.workersAssigned;
-      building.workersAssigned = Math.min(previousStaff, remainingStaff);
-      remainingStaff -= building.workersAssigned;
-      if (building.workersAssigned < previousStaff) {
-        addLog(state, `Se redujo el personal de ${BUILDINGS[building.id]?.name || building.id} por falta de adultos.`);
-      }
+      const previousStaff = building.workerIds.length;
+      building.workerIds = building.workerIds.filter(id => !deceasedIds.has(id));
+      building.workersAssigned = building.workerIds.length;
+      if (building.workersAssigned < previousStaff) addLog(state, `Se liberó un puesto en ${BUILDINGS[building.id]?.name || building.id}.`);
     }
   }
 
