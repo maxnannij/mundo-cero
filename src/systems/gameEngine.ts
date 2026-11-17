@@ -2,7 +2,7 @@ import {
   type GameState, type ActiveActivity, type AutomationOrder, type AutomationMode, type Resident,
   createInitialState, addResource, removeResource, addXp, addLog,
   getResidentToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
-  getAvailableWorkers, getAvailableResidents, getAssignedWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
+  getAvailableResidents, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
   PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, ANCIENT_STORAGE_KEY, OLDESTEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
