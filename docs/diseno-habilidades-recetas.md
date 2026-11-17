@@ -147,22 +147,22 @@ Los tiempos son tiempos base antes de aplicar herramientas, nivel y especializac
 | Habilidad | Acción | Nivel | Duración | Resultado | XP | Requisitos |
 |---|---|---:|---:|---|---:|---|
 | Tala | Madera común | 1 | 3 s | 1 madera | 8 | Ninguno |
-| Tala | Madera dura | 10 | 6 s | 1 madera dura; 40% de obtener 1 madera | 18 | Ninguno |
-| Tala | Madera resinosa | 20 | 8 s | 2 madera; 60% de obtener 1 resina | 28 | Ninguno |
+| Tala | Madera dura | 10 | 6 s | 1 madera dura; 40% de obtener 1 madera | 18 | Futuro: agregar usos antes de activarla |
+| Tala | Madera resinosa | 20 | 8 s | 2 madera; 60% de obtener 1 resina | 28 | Futuro: agregar recetas para resina |
 | Minería | Piedra común | 1 | 4 s | 1 piedra | 9 | Ninguno |
 | Minería | Pedernal | 5 | 5,5 s | 1 pedernal | 14 | Ninguno |
-| Minería | Mineral de cobre | 15 | 9 s | 1 mineral de cobre | 25 | Herramientas de piedra y prospección de cobre |
+| Minería | Mineral de cobre | 15 | 9 s | 1 mineral de cobre | 25 | Herramientas de piedra |
 | Minería | Mineral de hierro | 25 | 12 s | 1 mineral de hierro | 40 | Era del Hierro; futuro |
 | Herboristería | Fibras vegetales | 1 | 3,5 s | 1 fibra | 7 | Ninguno |
 | Herboristería | Semillas | 5 | 4,5 s | 1 semilla; 30% de obtener 1 fibra | 12 | Primavera, verano u otoño |
-| Herboristería | Hierbas medicinales | 10 | 6 s | 1 hierba | 18 | Futuro uso medicinal |
+| Herboristería | Hierbas medicinales | 10 | 6 s | 1 hierba | 18 | Futuro: agregar recetas medicinales |
 | Recolección | Bayas silvestres | 1 | 4 s | 2 bayas | 8 | Primavera, verano u otoño |
 | Recolección | Arcilla | 8 | 5,5 s | 1 arcilla | 14 | Ninguno |
 | Caza | Rastreo | 1 | 7 s | 70%: 1 carne cruda; 25%: 1 piel | 12 | Ninguno |
 | Caza | Caza menor | 3 | 9 s | 90%: 2 carnes; 45%: 1 piel | 20 | Tecnología Caza y trampeo; lanza recomendada |
 | Caza | Caza mayor | 10 | 16 s | 85%: 4 carnes; 65%: 2 pieles | 38 | Tecnología Caza y trampeo; lanza de piedra recomendada |
 
-La extracción de cobre debe estar disponible después de alcanzar Minería 15 y desbloquear la prospección, **antes** de investigar Metalurgia básica. Así se elimina la dependencia circular descrita más adelante.
+La extracción de cobre debe estar disponible al alcanzar Minería 15 y tener Herramientas de piedra, **sin exigir Metalurgia básica**. Así se elimina la dependencia circular descrita más adelante.
 
 ### Ciencia
 
@@ -231,7 +231,7 @@ Los valores corresponden a los bonos ya definidos en el catálogo actual de herr
 | Mineral de hierro | Mineral | 4 | Lingotes de hierro | Futuro |
 | Lingote de hierro | Fabricado | 4 | Herramientas e instalaciones avanzadas | Futuro |
 
-No conviene agregar materiales por variedad visual. Cada recurso nuevo debe tener al menos dos usos claros o ser un requisito de una progresión principal.
+No conviene agregar materiales por variedad visual. Cada recurso nuevo debe tener al menos dos usos claros o ser un requisito de una progresión principal. Por eso madera dura, resina y hierbas medicinales deben quedar desactivadas o marcadas como futuras hasta que tengan recetas y edificios que las consuman.
 
 ---
 
@@ -333,7 +333,7 @@ En el prototipo actual, la actividad de extracción de cobre requiere Metalurgia
 
 Resolverlo de una de estas dos maneras; se recomienda la primera:
 
-1. **Recomendado:** desbloquear la prospección de cobre con Herramientas de piedra y Minería 15. Metalurgia básica consume el mineral ya extraído y desbloquea horno/fundición.
+1. **Recomendado:** permitir la extracción de cobre con Herramientas de piedra y Minería 15. Metalurgia básica consume el mineral ya extraído y desbloquea horno/fundición.
 2. Alternativa: cambiar el coste de Metalurgia básica para que no exija mineral de cobre y dejar que la tecnología desbloquee su extracción.
 
 No mantener las dos condiciones simultáneamente.
