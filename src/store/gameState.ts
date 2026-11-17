@@ -12,7 +12,7 @@ export interface ResidentEquipment { tool?: string; clothing?: string; weapon?: 
 export interface Resident {
   id: string; name: string; sex: 'hombre' | 'mujer'; ageDays: number; health: number;
   equipment?: ResidentEquipment;
-  hungerDays: number; coldDays: number; partnerId?: string; parents?: string[];
+  hungerDays: number; coldDays: number; thirstDays?: number; partnerId?: string; parents?: string[];
   lifeExpectancyYears: number;
   pregnancyDaysRemaining?: number; conceptionProgressDays?: number; childrenBorn?: number;
 }
@@ -78,7 +78,7 @@ export function canAfford(state: GameState, costs: { resourceId: ResourceId; amo
 }
 export function addResource(state: GameState, id: ResourceId, amount: number): void {
   if (!Number.isFinite(amount) || amount <= 0) return;
-  state.resources[id] = Math.min((state.resources[id] ?? 0) + amount, getMaxStorage(state));
+  state.resources[id] = Math.min((state.resources[id] ?? 0) + amount, getMaxStorage(state, id));
 }
 export function removeResource(state: GameState, id: ResourceId, amount: number): boolean {
   if (!Number.isFinite(amount) || amount < 0) return false;
@@ -87,7 +87,8 @@ export function removeResource(state: GameState, id: ResourceId, amount: number)
   state.resources[id] = Math.max(0, current - amount);
   return true;
 }
-export function getMaxStorage(state: GameState, _id?: ResourceId): number {
+export function getMaxStorage(state: GameState, id?: ResourceId): number {
+  if (id === 'agua') return (state.resources.odre || 0) * 30;
   return state.maxStorage + state.buildings.reduce((sum, b) => sum + (BUILDINGS[b.id]?.storageBonus ?? 0) * b.count * b.level, 0);
 }
 export function addXp(state: GameState, skillId: SkillId, amount: number): string[] {
