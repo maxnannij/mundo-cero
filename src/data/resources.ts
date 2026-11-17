@@ -18,7 +18,9 @@ export type ResourceId =
   | 'mineral_cobre'
   | 'mineral_hierro'
   | 'lingote_cobre'
-  | 'lingote_hierro';
+  | 'lingote_hierro'
+  | 'carne_cruda'
+  | 'piel_animal';
 
 export interface ResourceDef {
   id: ResourceId;
@@ -182,6 +184,8 @@ export const RESOURCES: Record<ResourceId, ResourceDef> = {
     icon: '🔶',
     baseMax: 40,
   },
+  carne_cruda: { id: 'carne_cruda', name: 'Carne cruda', description: 'Carne obtenida de la caza. Debe cocinarse antes de consumirla.', category: 'alimento', icon: '🥩', baseMax: 100 },
+  piel_animal: { id: 'piel_animal', name: 'Piel animal', description: 'Piel sin procesar obtenida de animales. Puede curtirse para fabricar abrigo.', category: 'natural', icon: '🐾', baseMax: 80 },
   lingote_hierro: {
     id: 'lingote_hierro',
     name: 'Lingote de hierro',
