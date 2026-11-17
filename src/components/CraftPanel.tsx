@@ -50,8 +50,17 @@ export function CraftPanel() {
                   </span>
                 ))}
               </div>
+              <div className="recipe-inputs recipe-outputs">
+                {r.outputs.map((out, i) => (
+                  <span key={`${out.resourceId}-${i}`}>
+                    {out.amount} {out.resourceId === 'tool' ? '🛠️ herramienta' : out.resourceId === 'clothing' ? '🧥 abrigo' : `${RESOURCES[out.resourceId]?.icon || ''} ${RESOURCES[out.resourceId]?.name || out.resourceId}`}
+                  </span>
+                ))}
+              </div>
               <div className="recipe-meta">
                 {(r.durationMs / 1000).toFixed(0)}s · +{r.xp} XP · Nv.{r.requiredLevel}
+                {r.outputs.some(out => out.resourceId === 'plato_completo') && ' · 1 ración completa'}
+                {r.outputs.some(out => out.resourceId === 'carne_cocinada') && ' · ½ ración por porción'}
               </div>
               <div className="recipe-actions">
                 <input

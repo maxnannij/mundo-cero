@@ -12,12 +12,15 @@ import { TECHS } from '../data/techs';
 import { OBJECTIVES } from '../data/objectives';
 import { TOOLS } from '../data/tools';
 import { GAME_DAY_MS, DAYS_PER_YEAR, getCalendarInfo, type SeasonId } from '../data/calendar';
-import type { ResourceId } from '../data/resources';
+import { RESOURCES, type ResourceId } from '../data/resources';
 
 const MAX_SIMULATION_MS = 8 * 60 * 60 * 1000;
-const BERRIES_PER_PERSON_DAY = 20;
-const COOKED_FOOD_PER_PERSON_DAY = 3;
-const BERRY_EQUIVALENT_PER_COOKED_FOOD = BERRIES_PER_PERSON_DAY / COOKED_FOOD_PER_PERSON_DAY;
+const FOOD_VALUE: Partial<Record<ResourceId, number>> = Object.fromEntries(
+  Object.values(RESOURCES)
+    .filter(resource => resource.foodValue !== undefined)
+    .map(resource => [resource.id, resource.foodValue]),
+) as Partial<Record<ResourceId, number>>;
+const DAILY_FOOD_NEED = 20; // Equivalente a 20 bayas por habitante y día.
 const PREGNANCY_DAYS = 280;
 const CONCEPTION_DAYS = 45;
 
@@ -483,16 +486,20 @@ function processContinuousSystems(state: GameState, deltaMs: number): void {
 function consumeDailyFood(state: GameState): boolean {
   const people = state.population.residents.length;
   if (people === 0) return true;
-  // 3 unidades de comida cocida equivalen a 20 bayas por persona.
-  // Primero se consumen las comidas cocidas; las bayas completan la ración.
-  const neededBerryEquivalent = people * BERRIES_PER_PERSON_DAY;
-  const cookedUsed = Math.min(Math.max(0, state.resources.comida_cocida || 0), people * COOKED_FOOD_PER_PERSON_DAY);
-  if (cookedUsed > 0) removeResource(state, 'comida_cocida', cookedUsed);
-  const berryEquivalentCovered = cookedUsed * BERRY_EQUIVALENT_PER_COOKED_FOOD;
-  const berriesNeeded = Math.max(0, neededBerryEquivalent - berryEquivalentCovered);
-  const berriesUsed = Math.min(berriesNeeded, Math.max(0, state.resources.bayas || 0));
-  if (berriesUsed > 0) removeResource(state, 'bayas', berriesUsed);
-  return berriesNeeded - berriesUsed <= 1e-6;
+  let remainingNutrition = people * DAILY_FOOD_NEED;
+  // Se consumen primero las preparaciones de mayor valor, luego las raciones simples
+  // y finalmente las bayas. Se admite consumo fraccionado para cubrir exactamente
+  // las necesidades de asentamientos con cantidades impares de habitantes.
+  const foodPriority: ResourceId[] = ['plato_completo', 'carne_cocinada', 'comida_cocida', 'bayas'];
+  for (const resourceId of foodPriority) {
+    const value = FOOD_VALUE[resourceId] || 0;
+    if (value <= 0 || remainingNutrition <= 1e-6) continue;
+    const available = Math.max(0, state.resources[resourceId] || 0);
+    const used = Math.min(available, remainingNutrition / value);
+    if (used > 0) removeResource(state, resourceId, used);
+    remainingNutrition -= used * value;
+  }
+  return remainingNutrition <= 1e-6;
 }
 
 function consumeDailyHeating(state: GameState, season: SeasonId): boolean {
