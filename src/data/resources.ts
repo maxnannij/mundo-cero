@@ -141,7 +141,7 @@ export const RESOURCES: Record<ResourceId, ResourceDef> = {
     description: 'Agua potable. Necesaria para cocina y supervivencia.',
     category: 'alimento',
     icon: '💧',
-    baseMax: 50,
+    baseMax: 6,
   },
   comida_cocida: {
     id: 'comida_cocida',
