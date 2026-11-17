@@ -13,6 +13,8 @@ export type ResourceId =
   | 'hierbas'
   | 'agua'
   | 'comida_cocida'
+  | 'carne_cocinada'
+  | 'plato_completo'
   | 'cuerda'
   | 'tabla'
   | 'mineral_cobre'
@@ -29,6 +31,8 @@ export interface ResourceDef {
   category: 'natural' | 'mineral' | 'alimento' | 'componente' | 'cientifico' | 'fabricado';
   icon: string;
   baseMax?: number;
+  /** Equivalente nutricional en bayas: 20 puntos cubren un día-persona. */
+  foodValue?: number;
 }
 
 export const RESOURCES: Record<ResourceId, ResourceDef> = {
@@ -63,6 +67,7 @@ export const RESOURCES: Record<ResourceId, ResourceDef> = {
     category: 'alimento',
     icon: '🫐',
     baseMax: 100,
+    foodValue: 1,
   },
   pedernal: {
     id: 'pedernal',
@@ -143,6 +148,17 @@ export const RESOURCES: Record<ResourceId, ResourceDef> = {
     category: 'alimento',
     icon: '🍲',
     baseMax: 50,
+    foodValue: 20 / 3,
+  },
+  carne_cocinada: {
+    id: 'carne_cocinada', name: 'Carne cocinada',
+    description: 'Carne asada y lista para consumir. Una porción aporta la mitad de la ración diaria de un adulto.',
+    category: 'alimento', icon: '🍖', baseMax: 100, foodValue: 10,
+  },
+  plato_completo: {
+    id: 'plato_completo', name: 'Plato completo',
+    description: 'Una porción de carne cocinada acompañada de bayas. Aporta una ración diaria completa.',
+    category: 'alimento', icon: '🍛', baseMax: 100, foodValue: 20,
   },
   cuerda: {
     id: 'cuerda',
