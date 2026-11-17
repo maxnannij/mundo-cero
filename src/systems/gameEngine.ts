@@ -1,9 +1,9 @@
 import {
   type GameState, type ActiveActivity, type AutomationOrder, type AutomationMode, type Resident,
   createInitialState, addResource, removeResource, addXp, addLog,
-  getToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
+  getResidentToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
   getAvailableWorkers, getAssignedWorkers, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
-  PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, ANCIENT_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
+  PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, ANCIENT_STORAGE_KEY, OLDESTEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
 import { RECIPES, type RecipeDef } from '../data/recipes';
@@ -46,6 +46,7 @@ function normalizeSave(value: unknown): GameState | null {
         id: b.id, level: Math.max(1, Math.floor(Number(b.level) || 1)),
         count: Math.max(1, Math.floor(Number(b.count) || 1)),
         workersAssigned: Math.max(0, Math.floor(Number(b.workersAssigned) || 0)),
+        workerIds: Array.isArray(b.workerIds) ? b.workerIds.filter((id): id is string => typeof id === 'string') : [],
       }))
     : [];
   const population = raw.population && Array.isArray(raw.population.residents)
@@ -105,6 +106,7 @@ function normalizeSave(value: unknown): GameState | null {
       progressMs: Math.max(0, Number(activity.progressMs) || 0),
       targetAmount: Number.isFinite(Number(activity.targetAmount)) && Number(activity.targetAmount) > 0
         ? Math.max(1, Math.floor(Number(activity.targetAmount))) : undefined,
+      residentId: typeof activity.residentId === 'string' ? activity.residentId : '',
       actionsDone: Math.max(0, Math.floor(Number(activity.actionsDone) || 0)),
     }));
 
@@ -149,20 +151,42 @@ function normalizeSave(value: unknown): GameState | null {
     }
   }
 
-  // Drop staffing assignments that exceed the current adult workforce.
-  const livingAdults = population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
-  let staffRemaining = livingAdults;
-  for (const b of normalized.buildings) {
-    b.workersAssigned = Math.min(b.workersAssigned, staffRemaining, (BUILDINGS[b.id]?.workersRequired ?? 1) * b.count);
-    staffRemaining -= b.workersAssigned;
+  // Migrar asignaciones numéricas antiguas a identidades concretas, sin duplicar trabajadores.
+  const adultIds = population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).map(r => r.id);
+  const busy = new Set<string>();
+  for (const task of normalized.activeActivities) {
+    if (task.residentId && adultIds.includes(task.residentId) && !busy.has(task.residentId)) busy.add(task.residentId);
+    else task.residentId = '';
   }
-  normalized.activeActivities = normalized.activeActivities.slice(0, Math.max(0, livingAdults - getAssignedWorkers(normalized)));
+  for (const building of normalized.buildings) {
+    const cap = (BUILDINGS[building.id]?.workersRequired ?? 1) * building.count;
+    const validIds = building.workerIds.filter(id => adultIds.includes(id) && !busy.has(id)).slice(0, cap);
+    building.workerIds = validIds;
+    for (const id of validIds) busy.add(id);
+    const legacyCount = Math.max(validIds.length, Math.min(cap, building.workersAssigned));
+    while (building.workerIds.length < legacyCount) {
+      const next = adultIds.find(id => !busy.has(id));
+      if (!next) break;
+      building.workerIds.push(next);
+      busy.add(next);
+    }
+    building.workersAssigned = building.workerIds.length;
+  }
+  for (const task of normalized.activeActivities) {
+    if (!task.residentId) {
+      const next = adultIds.find(id => !busy.has(id));
+      if (!next) continue;
+      task.residentId = next;
+      busy.add(next);
+    }
+  }
+  normalized.activeActivities = normalized.activeActivities.filter(task => !!task.residentId);
   return normalized;
 }
 
 export function loadGame(): GameState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY) ?? localStorage.getItem(ANCIENT_STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY) ?? localStorage.getItem(ANCIENT_STORAGE_KEY) ?? localStorage.getItem(OLDESTEST_STORAGE_KEY) ?? localStorage.getItem(OLDESTEST_STORAGE_KEY);
     if (!raw) return createInitialState();
     const parsed = normalizeSave(JSON.parse(raw) as unknown);
     if (!parsed) throw new Error('La partida guardada no tiene una estructura válida.');
@@ -234,10 +258,12 @@ function isSeasonAvailable(activity: ActivityDef, season: SeasonId): boolean {
   return !activity.seasonsAvailable || activity.seasonsAvailable.includes(season);
 }
 
-export function startActivity(state: GameState, skillId: SkillId, activityId: string, targetAmount?: number): boolean {
+export function startActivity(state: GameState, skillId: SkillId, activityId: string, residentId?: string, targetAmount?: number): boolean {
   const act = getActivity(skillId, activityId);
   if (!act || !state.skills[skillId]) return false;
-  if (getAvailableWorkers(state) < 1) return false;
+  const worker = residentId ? state.population.residents.find(r => r.id === residentId) : undefined;
+  const assignedResident = worker || getAvailableResidents(state)[0];
+  if (!assignedResident || !getAvailableResidents(state).some(r => r.id === assignedResident.id)) return false;
   if (state.skills[skillId].level < act.requiredLevel) return false;
   if (act.unlockTech && !isTechUnlocked(state, act.unlockTech)) return false;
   if (act.requiredBuilding && !hasBuilding(state, act.requiredBuilding)) return false;
@@ -246,11 +272,11 @@ export function startActivity(state: GameState, skillId: SkillId, activityId: st
 
   const task: ActiveActivity = {
     id: `activity-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    skillId, activityId, startTime: Date.now(), progressMs: 0,
+    skillId, activityId, residentId: assignedResident.id, startTime: Date.now(), progressMs: 0,
     targetAmount: targetAmount ? Math.floor(targetAmount) : undefined, actionsDone: 0,
   };
   state.activeActivities.push(task);
-  addLog(state, `Comenzaste: ${act.name}. Tareas manuales activas: ${state.activeActivities.length}.`);
+  addLog(state, `${assignedResident.name} comenzó: ${act.name}. Tareas manuales activas: ${state.activeActivities.length}.`);
   return true;
 }
 
@@ -277,7 +303,7 @@ function completeActivityAction(state: GameState, act: ActivityDef, active: Acti
     return false;
   }
   for (const input of act.inputs ?? []) removeResource(state, input.resourceId, input.amount);
-  const toolBonuses = getToolBonuses(state, act.requiredTool || 'ninguna');
+  const toolBonuses = getResidentToolBonuses(state, active.residentId, act.requiredTool || 'ninguna');
   const skillBonuses = getSkillBonuses(state, act.skillId);
   const yieldMult = (toolBonuses.yieldMult || 1) * skillBonuses.yieldMult;
   for (const out of act.outputs) {
@@ -422,7 +448,7 @@ function processContinuousSystems(state: GameState, deltaMs: number): void {
       state.activeActivities = state.activeActivities.filter(task => task.id !== snapshot.id);
       continue;
     }
-    const toolSpeed = getToolBonuses(state, act.requiredTool || 'ninguna').speedMult || 1;
+    const toolSpeed = getResidentToolBonuses(state, active.residentId, act.requiredTool || 'ninguna').speedMult || 1;
     const skillSpeed = getSkillBonuses(state, act.skillId).speedMult;
     const duration = Math.max(100, act.durationMs * toolSpeed * skillSpeed);
     active.progressMs += deltaMs;
@@ -677,7 +703,7 @@ export function buildBuilding(state: GameState, buildingId: string): boolean {
   if (!canAfford(state, costs)) return false;
   for (const cost of costs) removeResource(state, cost.resourceId, cost.amount);
   if (existing) existing.count += 1;
-  else state.buildings.push({ id: buildingId, level: 1, count: 1, workersAssigned: 0 });
+  else state.buildings.push({ id: buildingId, level: 1, count: 1, workersAssigned: 0, workerIds: [] });
   addLog(state, `Construiste: ${def.name}`);
   checkObjectives(state);
   return true;
@@ -703,18 +729,26 @@ export function upgradeBuilding(state: GameState, buildingId: string): boolean {
   return true;
 }
 
-export function assignWorker(state: GameState, buildingId: string, delta: number): boolean {
+export function assignResidentToBuilding(state: GameState, buildingId: string, residentId: string): boolean {
   const instance = state.buildings.find(b => b.id === buildingId);
   const def = BUILDINGS[buildingId];
-  if (!instance || !def?.production || !Number.isFinite(delta) || delta === 0) return false;
-  if (delta > 0) {
-    const max = (def.workersRequired ?? 1) * instance.count;
-    if (instance.workersAssigned >= max || getAvailableWorkers(state) < delta) return false;
-    instance.workersAssigned = Math.min(max, instance.workersAssigned + Math.floor(delta));
-  } else {
-    instance.workersAssigned = Math.max(0, instance.workersAssigned + Math.ceil(delta));
-  }
-  addLog(state, `Personal asignado a ${def.name}: ${instance.workersAssigned}.`);
+  const resident = state.population.residents.find(r => r.id === residentId);
+  if (!instance || !def?.production || !resident || instance.workerIds.includes(residentId)) return false;
+  if (instance.workerIds.length >= (def.workersRequired ?? 1) * instance.count) return false;
+  if (!getAvailableResidents(state).some(r => r.id === residentId)) return false;
+  instance.workerIds.push(residentId);
+  instance.workersAssigned = instance.workerIds.length;
+  addLog(state, `${resident.name} fue asignado a ${def.name}.`);
+  return true;
+}
+
+export function unassignResidentFromBuilding(state: GameState, buildingId: string, residentId: string): boolean {
+  const instance = state.buildings.find(b => b.id === buildingId);
+  const resident = state.population.residents.find(r => r.id === residentId);
+  if (!instance || !instance.workerIds.includes(residentId)) return false;
+  instance.workerIds = instance.workerIds.filter(id => id !== residentId);
+  instance.workersAssigned = instance.workerIds.length;
+  addLog(state, `${resident?.name || 'Un trabajador'} dejó de trabajar en ${BUILDINGS[buildingId]?.name || buildingId}.`);
   return true;
 }
 
@@ -778,8 +812,7 @@ export function equipResidentTool(state: GameState, residentId: string, toolId: 
   if (resident.equipment?.tool) unequipResidentTool(state, residentId);
   state.toolInventory[toolId] = Math.max(0, (state.toolInventory[toolId] || 0) - 1);
   resident.equipment = { ...(resident.equipment || {}), tool: toolId };
-  // Keep legacy activity bonuses functional until the individual-worker assignment update.
-  state.equippedTools[tool.category] = toolId;
+  // Las bonificaciones se calculan a partir del equipo de este aldeano al ejecutar su tarea.
   addLog(state, `${resident.name} equipó: ${tool.name}.`);
   return true;
 }
@@ -810,5 +843,6 @@ export function resetGame(): GameState {
   localStorage.removeItem(PREVIOUS_STORAGE_KEY);
   localStorage.removeItem(OLDEST_STORAGE_KEY);
   localStorage.removeItem(ANCIENT_STORAGE_KEY);
+  localStorage.removeItem(OLDESTEST_STORAGE_KEY);
   return createInitialState();
 }
