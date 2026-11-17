@@ -1,19 +1,17 @@
 import { useState } from 'react';
 import { useGame } from '../store/GameContext';
 import { SKILLS, SKILL_LIST, xpForLevel, type SkillId } from '../data/skills';
-import { isTechUnlocked, hasBuilding, getAvailableResidents, canAfford } from '../store/gameState';
+import { isTechUnlocked, hasBuilding, getAvailableResidents } from '../store/gameState';
 import { RESOURCES } from '../data/resources';
 import { getCalendarInfo } from '../data/calendar';
 import { masteryXpForNext } from '../store/gameState';
 import { TOOLS } from '../data/tools';
-import { RECIPE_LIST } from '../data/recipes';
 
 export function SkillsPanel() {
-  const { state, startAct, stopAct, doChooseSpecialization, doCraft } = useGame();
+  const { state, startAct, stopAct, doChooseSpecialization } = useGame();
   const [selectedSkill, setSelectedSkill] = useState<SkillId>('tala');
   const [target, setTarget] = useState<string>('');
   const [selectedResidentId, setSelectedResidentId] = useState<string>('');
-  const [recipeQty, setRecipeQty] = useState(1);
   const skill = SKILLS[selectedSkill];
   const skillState = state.skills[selectedSkill];
   const xpNeeded = xpForLevel(skillState.level);
@@ -145,47 +143,6 @@ export function SkillsPanel() {
           {skill.activities.length === 0 && <p className="empty">Esta habilidad se utiliza principalmente mediante fabricación o construcción.</p>}
         </div>
 
-
-        {selectedSkill === 'cocina' && (
-          <section className="skill-recipes">
-            <h3>🍲 Recetas de cocina</h3>
-            <p className="recipe-meta">Las preparaciones se fabrican desde esta habilidad y se procesan en la cola de fabricación.</p>
-            <div className="recipe-grid">
-              {RECIPE_LIST.filter(recipe => recipe.skillId === 'cocina').map(recipe => {
-                const levelReady = skillState.level >= recipe.requiredLevel;
-                const techReady = !recipe.requiredTech || isTechUnlocked(state, recipe.requiredTech);
-                const buildingReady = !recipe.requiredBuilding || hasBuilding(state, recipe.requiredBuilding);
-                const materialsReady = canAfford(state, recipe.inputs);
-                const unlocked = levelReady && techReady && buildingReady;
-                const reason = !levelReady ? `Requiere Cocina nivel ${recipe.requiredLevel}`
-                  : !techReady ? 'Requiere la tecnología correspondiente'
-                  : !buildingReady ? 'Requiere una fogata'
-                  : !materialsReady ? 'Faltan ingredientes'
-                  : '';
-                return (
-                  <div key={recipe.id} className={`recipe-card ${!unlocked || !materialsReady ? 'cant' : ''}`}>
-                    <div className="recipe-title">{recipe.name}</div>
-                    <p className="recipe-desc">{recipe.description}</p>
-                    <div className="recipe-inputs">
-                      {recipe.inputs.map(input => <span key={input.resourceId}>{RESOURCES[input.resourceId]?.icon} {input.amount} {RESOURCES[input.resourceId]?.name}</span>)}
-                    </div>
-                    <div className="recipe-inputs recipe-outputs">
-                      {recipe.outputs.map((output, index) => <span key={index}>{output.amount} {RESOURCES[output.resourceId as keyof typeof RESOURCES]?.icon} {RESOURCES[output.resourceId as keyof typeof RESOURCES]?.name}</span>)}
-                    </div>
-                    <div className="recipe-meta">{recipe.durationMs / 1000}s · +{recipe.xp} XP · Cocina Nv.{recipe.requiredLevel}</div>
-                    {!unlocked || !materialsReady ? <div className="locked-msg">{reason}</div> : (
-                      <div className="recipe-actions">
-                        <input type="number" min={1} max={50} value={recipeQty} onChange={event => setRecipeQty(Math.max(1, parseInt(event.target.value) || 1))} className="qty-input" aria-label="Cantidad de tandas" />
-                        <button className="btn primary" onClick={() => doCraft(recipe.id, recipeQty)}>Preparar</button>
-                        <button className="btn" onClick={() => doCraft(recipe.id, 1)}>x1</button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
 
         {activeActivities.length > 0 && (
           <div className="active-status">
