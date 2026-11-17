@@ -25,13 +25,14 @@ export interface AutomationOrder {
 export interface GameState {
   version: number; lastSave: number; lastTick: number; resources: Record<ResourceId, number>;
   maxStorage: number; skills: Record<SkillId, SkillState>; unlockedTechs: string[];
-  buildings: BuildingInstance[]; equippedTools: Record<string, string>; ownedTools: string[]; toolInventory: Record<string, number>;
+  buildings: BuildingInstance[]; equippedTools: Record<string, string>; ownedTools: string[]; toolInventory: Record<string, number>; ownedClothing: string[]; clothingInventory: Record<string, number>;
   activeActivities: ActiveActivity[]; craftQueue: CraftQueueItem[]; automationOrders: AutomationOrder[];
   completedObjectives: string[]; totalActions: Record<string, number>; log: { time: number; message: string }[];
   calendar: CalendarState; population: PopulationState; settings: { offlineCapHours: number };
 }
-export const SAVE_VERSION = 6;
-export const STORAGE_KEY = 'mundo-cero-save-v6';
+export const SAVE_VERSION = 7;
+export const STORAGE_KEY = 'mundo-cero-save-v7';
+export const LEGACY_V6_STORAGE_KEY = 'mundo-cero-save-v6';
 export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v5';
 export const PREVIOUS_STORAGE_KEY = 'mundo-cero-save-v4';
 export const OLDEST_STORAGE_KEY = 'mundo-cero-save-v3';
@@ -64,7 +65,7 @@ export function createInitialState(): GameState {
   for (const s of Object.keys(SKILLS) as SkillId[]) skills[s] = { level: 1, xp: 0, masteryLevel: 0, masteryXp: 0 };
   return {
     version: SAVE_VERSION, lastSave: Date.now(), lastTick: Date.now(), resources, maxStorage: 200,
-    skills, unlockedTechs: [], buildings: [], equippedTools: {}, ownedTools: [], toolInventory: {},
+    skills, unlockedTechs: [], buildings: [], equippedTools: {}, ownedTools: [], toolInventory: {}, ownedClothing: [], clothingInventory: {},
     activeActivities: [], craftQueue: [], automationOrders: [], completedObjectives: [], totalActions: {},
     log: [{ time: Date.now(), message: 'Despertás en un mundo de piedra y silencio. Aren y Lira son los primeros habitantes de este asentamiento. La civilización se ha perdido: es hora de reconstruirla.' }],
     calendar: { totalDays: 0, dayProgressMs: 0 }, population: createInitialPopulation(),
