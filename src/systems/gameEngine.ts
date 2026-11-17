@@ -502,6 +502,15 @@ function consumeDailyFood(state: GameState): boolean {
   return remainingNutrition <= 1e-6;
 }
 
+function consumeDailyWater(state: GameState): boolean {
+  const needed = state.population.residents.length * 3;
+  if (needed <= 0) return true;
+  const available = Math.max(0, state.resources.agua || 0);
+  const used = Math.min(available, needed);
+  if (used > 0) removeResource(state, 'agua', used);
+  return used + 1e-6 >= needed;
+}
+
 function consumeDailyHeating(state: GameState, season: SeasonId): boolean {
   if (season !== 'invierno' || state.population.residents.length === 0) return true;
   let neededWood = state.population.residents.reduce((sum, resident) => sum + (resident.ageDays >= ADULT_AGE_DAYS ? 0.35 : 0.18) * (resident.equipment?.clothing === 'abrigo_piel' ? 0.5 : 1), 0);
@@ -558,6 +567,7 @@ function pairNewAdults(state: GameState): void {
 
 function processDailyPopulation(state: GameState, season: SeasonId): void {
   const fed = consumeDailyFood(state);
+  const hydrated = consumeDailyWater(state);
   const warm = consumeDailyHeating(state, season);
   for (const resident of state.population.residents) {
     if (fed) {
@@ -567,6 +577,13 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
       resident.hungerDays += 1;
       resident.health = Math.max(0, resident.health - 20);
       if (resident.hungerDays === 1 || resident.hungerDays % 5 === 0) addLog(state, `${resident.name} tiene hambre. Conseguí alimentos para el asentamiento.`);
+    }
+    if (!hydrated) {
+      resident.thirstDays = (resident.thirstDays || 0) + 1;
+      resident.health = Math.max(0, resident.health - 15);
+      if (resident.thirstDays === 1 || resident.thirstDays % 3 === 0) addLog(state, `${resident.name} tiene sed. Hace falta almacenar agua en odres antes del invierno.`);
+    } else {
+      resident.thirstDays = 0;
     }
     if (season === 'invierno' && !warm) {
       resident.coldDays += 1;
@@ -632,7 +649,7 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
   // When children become adults, pair unrelated, healthy residents automatically.
   pairNewAdults(state);
 
-  if (!state.population.reproductionEnabled || state.population.residents.length >= MAX_POPULATION || !hasBuilding(state, 'refugio') || !fed || !warm) return;
+  if (!state.population.reproductionEnabled || state.population.residents.length >= MAX_POPULATION || !hasBuilding(state, 'refugio') || !fed || !hydrated || !warm) return;
   const mothers = state.population.residents.filter(r =>
     r.sex === 'mujer' && r.ageDays >= ADULT_AGE_DAYS && r.ageDays <= 40 * DAYS_PER_YEAR &&
     r.health >= 70
@@ -663,7 +680,7 @@ function processDailySystems(state: GameState, previousSeason: SeasonId): void {
   const info = getCalendarInfo(state.calendar);
   if (info.season !== previousSeason) {
     addLog(state, `${info.seasonIcon} Comienza ${info.season.toLowerCase()}. ${info.seasonDescription}`);
-    if (info.season === 'invierno') addLog(state, 'El invierno llegó: las bayas silvestres dejan de crecer y la población necesita leña para calentarse.');
+    if (info.season === 'invierno') addLog(state, 'El invierno llegó: el pozo se congeló y no se puede extraer agua. La comunidad necesita reservas almacenadas en odres, además de leña y alimentos.');
   }
   processDailyPopulation(state, info.season);
   for (const task of [...state.activeActivities]) {

@@ -12,7 +12,8 @@ export type SkillId =
   | 'investigacion'
   | 'metalurgia'
   | 'carpinteria'
-  | 'caza';
+  | 'caza'
+  | 'trabajo_cuero';
 
 export interface ActivityDef {
   id: string;
@@ -200,6 +201,18 @@ export const SKILLS: Record<SkillId, SkillDef> = {
         outputs: [{ resourceId: 'bayas', amount: 2 }],
       },
       {
+        id: 'rec_agua',
+        skillId: 'recoleccion',
+        name: 'Extraer agua del pozo',
+        description: 'Llenar recipientes con agua del pozo. El agua no está disponible cuando se congela en invierno.',
+        requiredLevel: 1,
+        requiredBuilding: 'pozo',
+        seasonsAvailable: ['primavera', 'verano', 'otono'],
+        durationMs: 4000,
+        xp: 10,
+        outputs: [{ resourceId: 'agua', amount: 3 }],
+      },
+      {
         id: 'rec_arcilla',
         skillId: 'recoleccion',
         name: 'Arcilla',
@@ -218,6 +231,22 @@ export const SKILLS: Record<SkillId, SkillDef> = {
     icon: '🛠️',
     category: 'produccion',
     activities: [],
+  },
+  trabajo_cuero: {
+    id: 'trabajo_cuero',
+    name: 'Trabajo de cuero',
+    description: 'Curtir pieles y preparar cuero para confeccionar ropa y recipientes.',
+    icon: '🪡',
+    category: 'produccion',
+    activities: [
+      {
+        id: 'curtir_piel', skillId: 'trabajo_cuero', name: 'Curtir pieles',
+        description: 'Tratar pieles animales para convertirlas en cuero resistente.',
+        requiredLevel: 1, durationMs: 7000, xp: 18,
+        inputs: [{ resourceId: 'piel_animal', amount: 2 }],
+        outputs: [{ resourceId: 'cuero', amount: 1 }],
+      },
+    ],
   },
   cocina: {
     id: 'cocina',
@@ -371,7 +400,7 @@ export const SKILLS: Record<SkillId, SkillDef> = {
   },
 };
 
-export const SKILL_LIST = Object.values(SKILLS);
+export const SKILL_LIST = Object.values(SKILLS).filter(skill => skill.activities.length > 0);
 
 export function xpForLevel(level: number): number {
   return Math.floor(50 + level * 25 + Math.pow(level, 1.8) * 8);
