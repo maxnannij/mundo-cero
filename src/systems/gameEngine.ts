@@ -649,7 +649,7 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
   // When children become adults, pair unrelated, healthy residents automatically.
   pairNewAdults(state);
 
-  if (!state.population.reproductionEnabled || state.population.residents.length >= MAX_POPULATION || !hasBuilding(state, 'refugio') || !fed || !warm) return;
+  if (!state.population.reproductionEnabled || state.population.residents.length >= MAX_POPULATION || !hasBuilding(state, 'refugio') || !fed || !hydrated || !warm) return;
   const mothers = state.population.residents.filter(r =>
     r.sex === 'mujer' && r.ageDays >= ADULT_AGE_DAYS && r.ageDays <= 40 * DAYS_PER_YEAR &&
     r.health >= 70
