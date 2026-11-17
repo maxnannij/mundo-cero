@@ -1,4 +1,4 @@
-export type ToolCategory = 'hacha' | 'pico' | 'ninguna';
+export type ToolCategory = 'hacha' | 'pico' | 'lanza' | 'ninguna';
 
 export interface ToolDef {
   id: string;
@@ -16,6 +16,8 @@ export interface ToolDef {
 }
 
 export const TOOLS: Record<string, ToolDef> = {
+  lanza_madera: { id: 'lanza_madera', name: 'Lanza de madera', description: 'Una lanza sencilla, endurecida al fuego y con punta afilada.', category: 'lanza', tier: 0, bonuses: { speedMult: 0.9, yieldMult: 1.1, specialChance: 0.05 }, icon: '🗡️' },
+  lanza_piedra: { id: 'lanza_piedra', name: 'Lanza de piedra', description: 'Lanza reforzada con una punta de piedra tallada.', category: 'lanza', tier: 1, bonuses: { speedMult: 0.75, yieldMult: 1.25, specialChance: 0.12 }, icon: '🗡️' },
   hacha_rudimentaria: {
     id: 'hacha_rudimentaria',
     name: 'Hacha rudimentaria',

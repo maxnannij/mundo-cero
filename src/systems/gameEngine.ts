@@ -3,7 +3,7 @@ import {
   createInitialState, addResource, removeResource, addXp, addLog,
   getResidentToolBonuses, calculatePassiveProduction, canAfford, isTechUnlocked,
   getAvailableResidents, hasBuilding, getSkillBonuses, addMasteryXp, SAVE_VERSION, STORAGE_KEY, LEGACY_STORAGE_KEY,
-  PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, ANCIENT_STORAGE_KEY, OLDESTEST_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
+  PREVIOUS_STORAGE_KEY, OLDEST_STORAGE_KEY, ANCIENT_STORAGE_KEY, OLDESTEST_STORAGE_KEY, LEGACY_V6_STORAGE_KEY, generateLifeExpectancyYears, ADULT_AGE_DAYS, MAX_POPULATION,
 } from '../store/gameState';
 import { SKILLS, type SkillId, type ActivityDef } from '../data/skills';
 import { RECIPES, type RecipeDef } from '../data/recipes';
@@ -118,6 +118,8 @@ function normalizeSave(value: unknown): GameState | null {
     unlockedTechs: Array.isArray(raw.unlockedTechs) ? raw.unlockedTechs.filter(x => typeof x === 'string' && !!TECHS[x]) : [],
     equippedTools: isRecord(raw.equippedTools) ? raw.equippedTools as Record<string, string> : {},
     ownedTools: Array.isArray(raw.ownedTools) ? [...new Set(raw.ownedTools.filter(x => typeof x === 'string' && !!TOOLS[x]))] : [],
+    ownedClothing: Array.isArray(raw.ownedClothing) ? [...new Set(raw.ownedClothing.filter(x => x === 'abrigo_piel'))] : [],
+    clothingInventory: isRecord(raw.clothingInventory) ? Object.fromEntries(Object.entries(raw.clothingInventory).filter(([id, count]) => id === 'abrigo_piel' && typeof count === 'number' && Number.isFinite(count) && count > 0).map(([id, count]) => [id, Math.floor(Number(count))])) : {},
     toolInventory: isRecord(raw.toolInventory)
       ? Object.fromEntries(Object.entries(raw.toolInventory).filter(([id, count]) => !!TOOLS[id] && typeof count === 'number' && Number.isFinite(count) && count > 0).map(([id, count]) => [id, Math.floor(Number(count))]))
       : Object.fromEntries((Array.isArray(raw.ownedTools) ? raw.ownedTools : []).filter((id): id is string => typeof id === 'string' && !!TOOLS[id]).map(id => [id, 1])),
@@ -186,7 +188,7 @@ function normalizeSave(value: unknown): GameState | null {
 
 export function loadGame(): GameState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY) ?? localStorage.getItem(ANCIENT_STORAGE_KEY) ?? localStorage.getItem(OLDESTEST_STORAGE_KEY) ?? localStorage.getItem(OLDESTEST_STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_V6_STORAGE_KEY) ?? localStorage.getItem(LEGACY_STORAGE_KEY) ?? localStorage.getItem(PREVIOUS_STORAGE_KEY) ?? localStorage.getItem(OLDEST_STORAGE_KEY) ?? localStorage.getItem(ANCIENT_STORAGE_KEY) ?? localStorage.getItem(OLDESTEST_STORAGE_KEY) ?? localStorage.getItem(OLDESTEST_STORAGE_KEY);
     if (!raw) return createInitialState();
     const parsed = normalizeSave(JSON.parse(raw) as unknown);
     if (!parsed) throw new Error('La partida guardada no tiene una estructura válida.');
@@ -346,7 +348,11 @@ function processCrafting(state: GameState, deltaMs: number): void {
 
 function finishCraft(state: GameState, recipe: RecipeDef): void {
   for (const out of recipe.outputs) {
-    if (out.resourceId === 'tool' && out.toolId) {
+    if (out.resourceId === 'clothing' && out.clothingId === 'abrigo_piel') {
+      state.clothingInventory.abrigo_piel = (state.clothingInventory.abrigo_piel || 0) + 1;
+      if (!state.ownedClothing.includes('abrigo_piel')) state.ownedClothing.push('abrigo_piel');
+      addLog(state, '¡Fabricaste un abrigo de piel! Podés equiparlo a un aldeano desde Población.');
+    } else if (out.resourceId === 'tool' && out.toolId) {
       state.toolInventory[out.toolId] = (state.toolInventory[out.toolId] || 0) + 1;
       if (!state.ownedTools.includes(out.toolId)) state.ownedTools.push(out.toolId);
       addLog(state, `¡Fabricaste ${TOOLS[out.toolId]?.name || out.toolId}! (${state.toolInventory[out.toolId]} disponibles)`);
@@ -491,9 +497,7 @@ function consumeDailyFood(state: GameState): boolean {
 
 function consumeDailyHeating(state: GameState, season: SeasonId): boolean {
   if (season !== 'invierno' || state.population.residents.length === 0) return true;
-  const adults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS).length;
-  const children = state.population.residents.length - adults;
-  let neededWood = adults * 0.35 + children * 0.18;
+  let neededWood = state.population.residents.reduce((sum, resident) => sum + (resident.ageDays >= ADULT_AGE_DAYS ? 0.35 : 0.18) * (resident.equipment?.clothing === 'abrigo_piel' ? 0.5 : 1), 0);
   if (hasBuilding(state, 'fogata')) neededWood *= 0.55;
   if (hasBuilding(state, 'refugio') && hasBuilding(state, 'fogata')) neededWood *= 0.85;
   const used = Math.min(state.resources.madera || 0, neededWood);
@@ -559,7 +563,7 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
     }
     if (season === 'invierno' && !warm) {
       resident.coldDays += 1;
-      resident.health = Math.max(0, resident.health - 2);
+      resident.health = Math.max(0, resident.health - (resident.equipment?.clothing === 'abrigo_piel' ? 0.75 : 2));
       if (resident.coldDays === 1 || resident.coldDays % 5 === 0) addLog(state, `${resident.name} está pasando frío. Hace falta madera para calefaccionar.`);
     } else {
       resident.coldDays = 0;
@@ -575,6 +579,10 @@ function processDailyPopulation(state: GameState, season: SeasonId): void {
   if (deceased.length > 0) {
     const deceasedIds = new Set(deceased.map(resident => resident.id));
     for (const resident of deceased) {
+      if (resident.equipment?.clothing === 'abrigo_piel') {
+        state.clothingInventory.abrigo_piel = (state.clothingInventory.abrigo_piel || 0) + 1;
+        addLog(state, `El abrigo de piel de ${resident.name} volvió al inventario.`);
+      }
       const lostTool = resident.equipment?.tool;
       if (lostTool && TOOLS[lostTool]) {
         state.toolInventory[lostTool] = (state.toolInventory[lostTool] || 0) + 1;
@@ -795,6 +803,25 @@ export function unequipResidentTool(state: GameState, residentId: string): boole
   return true;
 }
 
+export function unequipResidentClothing(state: GameState, residentId: string): boolean {
+  const resident = state.population.residents.find(r => r.id === residentId);
+  if (!resident || resident.equipment?.clothing !== 'abrigo_piel') return false;
+  resident.equipment = { ...(resident.equipment || {}), clothing: undefined };
+  state.clothingInventory.abrigo_piel = (state.clothingInventory.abrigo_piel || 0) + 1;
+  addLog(state, `${resident.name} guardó el abrigo de piel en el inventario.`);
+  return true;
+}
+
+export function equipResidentClothing(state: GameState, residentId: string, clothingId: string): boolean {
+  const resident = state.population.residents.find(r => r.id === residentId);
+  if (!resident || clothingId !== 'abrigo_piel' || (state.clothingInventory.abrigo_piel || 0) < 1 || resident.equipment?.clothing === clothingId) return false;
+  if (resident.equipment?.clothing) unequipResidentClothing(state, residentId);
+  state.clothingInventory.abrigo_piel = Math.max(0, (state.clothingInventory.abrigo_piel || 0) - 1);
+  resident.equipment = { ...(resident.equipment || {}), clothing: clothingId };
+  addLog(state, `${resident.name} se equipó con un abrigo de piel. El consumo de leña y el daño por frío serán menores.`);
+  return true;
+}
+
 export function equipResidentTool(state: GameState, residentId: string, toolId: string): boolean {
   const resident = state.population.residents.find(r => r.id === residentId);
   const tool = TOOLS[toolId];
@@ -831,6 +858,7 @@ function checkObjectives(state: GameState): void {
 
 export function resetGame(): GameState {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(LEGACY_V6_STORAGE_KEY);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
   localStorage.removeItem(PREVIOUS_STORAGE_KEY);
   localStorage.removeItem(OLDEST_STORAGE_KEY);

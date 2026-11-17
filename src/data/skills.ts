@@ -11,7 +11,8 @@ export type SkillId =
   | 'construccion'
   | 'investigacion'
   | 'metalurgia'
-  | 'carpinteria';
+  | 'carpinteria'
+  | 'caza';
 
 export interface ActivityDef {
   id: string;
@@ -298,6 +299,14 @@ export const SKILLS: Record<SkillId, SkillDef> = {
         outputs: [{ resourceId: 'lingote_cobre', amount: 1 }],
         unlockTech: 'metalurgia_basica',
       },
+    ],
+  },
+  caza: {
+    id: 'caza', name: 'Caza', description: 'Rastrear animales, preparar trampas y obtener alimento y pieles.', icon: '🏹', category: 'recoleccion',
+    activities: [
+      { id: 'rastreo', skillId: 'caza', name: 'Rastrear animales', description: 'Buscar huellas y rastros. La caza no siempre tiene éxito.', requiredLevel: 1, durationMs: 7000, xp: 12, outputs: [{ resourceId: 'carne_cruda', amount: 1, chance: 0.7 }, { resourceId: 'piel_animal', amount: 1, chance: 0.25 }] },
+      { id: 'caza_menor', skillId: 'caza', name: 'Caza menor', description: 'Cazar animales pequeños con una lanza.', requiredLevel: 3, durationMs: 9000, xp: 20, requiredTool: 'lanza', unlockTech: 'caza_primitiva', outputs: [{ resourceId: 'carne_cruda', amount: 2, chance: 0.9 }, { resourceId: 'piel_animal', amount: 1, chance: 0.45 }] },
+      { id: 'caza_mayor', skillId: 'caza', name: 'Caza mayor', description: 'Rastrear presas grandes. Requiere experiencia y una lanza de piedra.', requiredLevel: 10, durationMs: 16000, xp: 38, requiredTool: 'lanza', unlockTech: 'caza_primitiva', outputs: [{ resourceId: 'carne_cruda', amount: 4, chance: 0.85 }, { resourceId: 'piel_animal', amount: 2, chance: 0.65 }] },
     ],
   },
   carpinteria: {

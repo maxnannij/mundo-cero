@@ -7,7 +7,7 @@ import { TOOL_LIST } from '../data/tools';
 function yearsOld(ageDays: number): number { return Math.floor(ageDays / DAYS_PER_YEAR); }
 
 export function PopulationPanel() {
-  const { state, doAssignResidentToBuilding, doUnassignResidentFromBuilding, doSetReproduction, doEquipResidentTool, doUnequipResidentTool } = useGame();
+  const { state, doAssignResidentToBuilding, doUnassignResidentFromBuilding, doSetReproduction, doEquipResidentTool, doUnequipResidentTool, doEquipResidentClothing, doUnequipResidentClothing } = useGame();
   const calendar = getCalendarInfo(state.calendar);
   const residents = state.population.residents;
   const adults = residents.filter(r => r.ageDays >= ADULT_AGE_DAYS).length;
@@ -20,7 +20,8 @@ export function PopulationPanel() {
   const winter = calendar.season === 'invierno';
   const woodPerDay = winter ? adults * 0.35 + children * 0.18 : 0;
   const hasFire = state.buildings.some(b => b.id === 'fogata' && b.count > 0);
-  const estimatedWood = woodPerDay * (hasFire ? 0.55 : 1);
+  const clothingReduction = residents.reduce((sum, r) => sum + (r.equipment?.clothing === 'abrigo_piel' ? (r.ageDays >= ADULT_AGE_DAYS ? 0.175 : 0.09) : 0), 0);
+  const estimatedWood = Math.max(0, (woodPerDay - clothingReduction) * (hasFire ? 0.55 : 1));
 
   return (
     <div className="panel population-panel">
@@ -92,9 +93,16 @@ export function PopulationPanel() {
                   </select>}
                   {!adult && <small>Disponible al cumplir 18 años</small>}
                 </div>
-                <div className="resident-equipment-slots"><span>Ropa: <b>Vacío</b></span><span>Arma: <b>Vacío</b></span><span>Accesorio: <b>Vacío</b></span></div>
+                <div className="resident-equipment-row">
+          <span>{resident.equipment?.clothing === 'abrigo_piel' ? '🧥 Abrigo de piel equipado' : 'Sin ropa de abrigo'}</span>
+          <select className="field-select resident-tool-select" value={resident.equipment?.clothing || ''} onChange={e => e.target.value ? doEquipResidentClothing(resident.id, e.target.value) : doUnequipResidentClothing(resident.id)}>
+            <option value="">Sin abrigo</option>
+            {(state.clothingInventory.abrigo_piel || 0) > 0 || resident.equipment?.clothing === 'abrigo_piel' ? <option value="abrigo_piel">🧥 Abrigo de piel · {state.clothingInventory.abrigo_piel || 0} en depósito</option> : null}
+          </select>
+        </div>
+        <div className="resident-equipment-slots"><span>Arma: <b>Vacío</b></span><span>Accesorio: <b>Vacío</b></span></div>
               </div>
-              <p className="recipe-meta">El equipo de cada aldeano modifica su rendimiento cuando realiza una tarea compatible.</p>
+              <p className="recipe-meta">Las herramientas mejoran tareas compatibles. Los abrigos reducen un 50% el consumo de leña y el daño por frío.</p>
               {resident.sex === 'mujer' && resident.partnerId && (
                 <div className="reproduction-progress">
                   {pregnant ? <span>🤰 Embarazo: {resident.pregnancyDaysRemaining} días restantes</span> :

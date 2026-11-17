@@ -90,6 +90,11 @@ export const TECHS: Record<string, TechDef> = {
     unlocks: ['huerto'],
     era: 2,
   },
+  caza_primitiva: {
+    id: 'caza_primitiva', name: 'Caza y trampeo', description: 'Desarrollar lanzas y trampas para obtener carne y pieles de forma más fiable.', icon: '🏹',
+    cost: [{ resourceId: 'madera', amount: 25 }, { resourceId: 'piedra', amount: 15 }, { resourceId: 'fibra', amount: 12 }], knowledgeCost: 10,
+    prerequisites: ['herramientas_piedra'], unlocks: ['trampa_caza', 'lanza_madera', 'lanza_piedra', 'caza_menor', 'caza_mayor'], era: 1,
+  },
   metalurgia_basica: {
     id: 'metalurgia_basica',
     name: 'Metalurgia básica',

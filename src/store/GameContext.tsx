@@ -4,7 +4,7 @@ import {
   loadGame, saveGame, tick, processOffline, startActivity, stopActivity, queueCraft,
   buildBuilding, upgradeBuilding, researchTech, equipTool, resetGame, exportSave, importSave,
   assignResidentToBuilding, unassignResidentFromBuilding, setReproduction, createAutomationOrder, toggleAutomationOrder, removeAutomationOrder, chooseSpecialization,
-  equipResidentTool, unequipResidentTool,
+  equipResidentTool, unequipResidentTool, equipResidentClothing, unequipResidentClothing,
 } from '../systems/gameEngine';
 import type { SkillId } from '../data/skills';
 
@@ -20,6 +20,8 @@ type Action =
   | { type: 'EQUIP'; toolId: string }
   | { type: 'EQUIP_RESIDENT_TOOL'; residentId: string; toolId: string }
   | { type: 'UNEQUIP_RESIDENT_TOOL'; residentId: string }
+  | { type: 'EQUIP_RESIDENT_CLOTHING'; residentId: string; clothingId: string }
+  | { type: 'UNEQUIP_RESIDENT_CLOTHING'; residentId: string }
   | { type: 'ASSIGN_RESIDENT_BUILDING'; buildingId: string; residentId: string }
   | { type: 'UNASSIGN_RESIDENT_BUILDING'; buildingId: string; residentId: string }
   | { type: 'SET_REPRODUCTION'; enabled: boolean }
@@ -49,6 +51,8 @@ function reducer(state: GameState, action: Action): GameState {
     case 'EQUIP': equipTool(next, action.toolId); break;
     case 'EQUIP_RESIDENT_TOOL': equipResidentTool(next, action.residentId, action.toolId); break;
     case 'UNEQUIP_RESIDENT_TOOL': unequipResidentTool(next, action.residentId); break;
+    case 'EQUIP_RESIDENT_CLOTHING': equipResidentClothing(next, action.residentId, action.clothingId); break;
+    case 'UNEQUIP_RESIDENT_CLOTHING': unequipResidentClothing(next, action.residentId); break;
     case 'ASSIGN_RESIDENT_BUILDING': assignResidentToBuilding(next, action.buildingId, action.residentId); break;
     case 'UNASSIGN_RESIDENT_BUILDING': unassignResidentFromBuilding(next, action.buildingId, action.residentId); break;
     case 'SET_REPRODUCTION': setReproduction(next, action.enabled); break;
@@ -73,6 +77,8 @@ interface GameContextValue {
   doEquip: (id: string) => void;
   doEquipResidentTool: (residentId: string, toolId: string) => void;
   doUnequipResidentTool: (residentId: string) => void;
+  doEquipResidentClothing: (residentId: string, clothingId: string) => void;
+  doUnequipResidentClothing: (residentId: string) => void;
   doAssignResidentToBuilding: (buildingId: string, residentId: string) => void;
   doUnassignResidentFromBuilding: (buildingId: string, residentId: string) => void;
   doSetReproduction: (enabled: boolean) => void;
@@ -133,6 +139,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const doEquip = useCallback((id: string) => dispatch({ type: 'EQUIP', toolId: id }), []);
   const doEquipResidentTool = useCallback((residentId: string, toolId: string) => dispatch({ type: 'EQUIP_RESIDENT_TOOL', residentId, toolId }), []);
   const doUnequipResidentTool = useCallback((residentId: string) => dispatch({ type: 'UNEQUIP_RESIDENT_TOOL', residentId }), []);
+  const doEquipResidentClothing = useCallback((residentId: string, clothingId: string) => dispatch({ type: 'EQUIP_RESIDENT_CLOTHING', residentId, clothingId }), []);
+  const doUnequipResidentClothing = useCallback((residentId: string) => dispatch({ type: 'UNEQUIP_RESIDENT_CLOTHING', residentId }), []);
   const doAssignResidentToBuilding = useCallback((buildingId: string, residentId: string) => dispatch({ type: 'ASSIGN_RESIDENT_BUILDING', buildingId, residentId }), []);
   const doUnassignResidentFromBuilding = useCallback((buildingId: string, residentId: string) => dispatch({ type: 'UNASSIGN_RESIDENT_BUILDING', buildingId, residentId }), []);
   const doSetReproduction = useCallback((enabled: boolean) => dispatch({ type: 'SET_REPRODUCTION', enabled }), []);
@@ -161,7 +169,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   return (
     <GameContext.Provider value={{
       state, dispatch, startAct, stopAct, doCraft, doBuild, doUpgrade, doResearch, doEquip,
-      doEquipResidentTool, doUnequipResidentTool, doAssignResidentToBuilding, doUnassignResidentFromBuilding, doSetReproduction, doChooseSpecialization, doCreateAutomation, doToggleAutomation, doRemoveAutomation,
+      doEquipResidentTool, doUnequipResidentTool, doEquipResidentClothing, doUnequipResidentClothing, doAssignResidentToBuilding, doUnassignResidentFromBuilding, doSetReproduction, doChooseSpecialization, doCreateAutomation, doToggleAutomation, doRemoveAutomation,
       doReset, doRestart, doExport, doImport, saveNow,
     }}>
       {children}
