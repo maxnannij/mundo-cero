@@ -1,22 +1,26 @@
 import { useState } from 'react';
 import { useGame } from '../store/GameContext';
 import { SKILLS, SKILL_LIST, xpForLevel, type SkillId } from '../data/skills';
-import { isTechUnlocked, hasBuilding, getAvailableWorkers } from '../store/gameState';
+import { isTechUnlocked, hasBuilding, getAvailableResidents } from '../store/gameState';
 import { RESOURCES } from '../data/resources';
 import { getCalendarInfo } from '../data/calendar';
 import { masteryXpForNext } from '../store/gameState';
+import { TOOLS } from '../data/tools';
 
 export function SkillsPanel() {
   const { state, startAct, stopAct, doChooseSpecialization } = useGame();
   const [selectedSkill, setSelectedSkill] = useState<SkillId>('tala');
   const [target, setTarget] = useState<string>('');
+  const [selectedResidentId, setSelectedResidentId] = useState<string>('');
   const skill = SKILLS[selectedSkill];
   const skillState = state.skills[selectedSkill];
   const xpNeeded = xpForLevel(skillState.level);
   const xpPct = Math.min(100, (skillState.xp / xpNeeded) * 100);
   const availableSkills = SKILL_LIST.filter(s => s.id !== 'metalurgia' || isTechUnlocked(state, 'metalurgia_basica'));
   const activeActivities = state.activeActivities;
-  const availableWorkers = getAvailableWorkers(state);
+  const availableResidents = getAvailableResidents(state);
+  const availableWorkers = availableResidents.length;
+  const selectedResident = availableResidents.find(r => r.id === selectedResidentId) || availableResidents[0];
   const season = getCalendarInfo(state.calendar).season;
 
   return (
@@ -114,14 +118,22 @@ export function SkillsPanel() {
                   <div className="locked-msg">{lockMessage}</div>
                 ) : (
                   <div className="act-actions">
-                    <button className="btn primary" disabled={!materialsReady || availableWorkers < 1} onClick={() => startAct(selectedSkill, act.id)}>
-                      {isActive ? 'Asignar otro trabajador' : 'Iniciar'}
+                    <select className="field-select activity-worker-select" value={selectedResident?.id || ''} disabled={availableWorkers < 1} onChange={e => setSelectedResidentId(e.target.value)}>
+                      {availableWorkers === 0 && <option value="">Sin trabajadores libres</option>}
+                      {availableResidents.map(resident => <option key={resident.id} value={resident.id}>{resident.name}</option>)}
+                    </select>
+                    <button className="btn primary" disabled={!materialsReady || !selectedResident} onClick={() => selectedResident && startAct(selectedSkill, act.id, selectedResident.id)}>
+                      {isActive ? 'Asignar trabajador' : 'Iniciar'}
                     </button>
                     <input type="number" placeholder="Acciones" min={1} value={target}
                       onChange={e => setTarget(e.target.value)} className="target-input" />
-                    <button className="btn" disabled={!materialsReady || availableWorkers < 1 || !Number.isFinite(Number(target)) || Number(target) < 1}
-                      onClick={() => startAct(selectedSkill, act.id, Number(target))}>Hasta X acciones</button>
-                    {isActive && <small className="good-text">En curso: {activeTasksForActivity.length} trabajador(es) · podés sumar otro.</small>}
+                    <button className="btn" disabled={!materialsReady || !selectedResident || !Number.isFinite(Number(target)) || Number(target) < 1}
+                      onClick={() => selectedResident && startAct(selectedSkill, act.id, selectedResident.id, Number(target))}>Hasta X acciones</button>
+                    {selectedResident && act.requiredTool && (() => {
+                      const tool = selectedResident.equipment?.tool ? TOOLS[selectedResident.equipment.tool] : undefined;
+                      return <small className="act-meta">{tool && tool.category === act.requiredTool ? `${tool.icon} ${selectedResident.name}: ${tool.name} · ${Math.round((1 - (tool.bonuses.speedMult ?? 1)) * 100)}% más rápido · ${Math.round(((tool.bonuses.yieldMult ?? 1) - 1) * 100)}% más recursos` : `${selectedResident.name} no tiene una herramienta compatible (${act.requiredTool}).`}</small>;
+                    })()}
+                    {isActive && <small className="good-text">En curso: {activeTasksForActivity.length} trabajador(es) · podés asignar otro.</small>}
                     {availableWorkers < 1 && <small className="warning-text">No hay trabajadores libres. Liberá uno de una instalación o detené una tarea.</small>}
                   </div>
                 )}
@@ -141,6 +153,7 @@ export function SkillsPanel() {
                 <div key={active.id} className="active-task-row">
                   <p>
                     <strong>{SKILLS[active.skillId]?.name}: {activeDef?.name || active.activityId}</strong>
+                    {' · Trabajador: '}{state.population.residents.find(r => r.id === active.residentId)?.name || 'Aldeano'}
                     {' · Acciones: '}{active.actionsDone}{active.targetAmount ? ` / ${active.targetAmount}` : ''}
                     <button className="btn danger" onClick={() => stopAct(active.id)}>Detener</button>
                   </p>
