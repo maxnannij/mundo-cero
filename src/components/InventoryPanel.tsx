@@ -49,6 +49,15 @@ export function InventoryPanel() {
       ))}
 
       <div className="inv-section">
+        <h3>Ropa y abrigo</h3>
+        <div className="inv-grid">
+          <div className={`inv-item ${(state.clothingInventory.abrigo_piel || 0) > 0 ? 'equipped' : ''}`}>
+            <span className="inv-icon">🧥</span><div><div className="inv-name">Abrigo de piel</div><div className="inv-amount">{state.clothingInventory.abrigo_piel || 0} en depósito · {state.population.residents.filter(r => r.equipment?.clothing === 'abrigo_piel').length} equipado(s)</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="inv-section">
         <h3>Herramientas poseídas</h3>
         <div className="inv-grid">
           {state.ownedTools.length === 0 && <p className="empty">Ninguna aún.</p>}
