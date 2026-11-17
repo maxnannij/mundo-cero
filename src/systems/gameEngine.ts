@@ -814,7 +814,7 @@ export function unequipResidentClothing(state: GameState, residentId: string): b
 
 export function equipResidentClothing(state: GameState, residentId: string, clothingId: string): boolean {
   const resident = state.population.residents.find(r => r.id === residentId);
-  if (!resident || resident.ageDays < ADULT_AGE_DAYS || clothingId !== 'abrigo_piel' || (state.clothingInventory.abrigo_piel || 0) < 1 || resident.equipment?.clothing === clothingId) return false;
+  if (!resident || clothingId !== 'abrigo_piel' || (state.clothingInventory.abrigo_piel || 0) < 1 || resident.equipment?.clothing === clothingId) return false;
   if (resident.equipment?.clothing) unequipResidentClothing(state, residentId);
   state.clothingInventory.abrigo_piel = Math.max(0, (state.clothingInventory.abrigo_piel || 0) - 1);
   resident.equipment = { ...(resident.equipment || {}), clothing: clothingId };
@@ -858,6 +858,7 @@ function checkObjectives(state: GameState): void {
 
 export function resetGame(): GameState {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(LEGACY_V6_STORAGE_KEY);
   localStorage.removeItem(LEGACY_STORAGE_KEY);
   localStorage.removeItem(PREVIOUS_STORAGE_KEY);
   localStorage.removeItem(OLDEST_STORAGE_KEY);
