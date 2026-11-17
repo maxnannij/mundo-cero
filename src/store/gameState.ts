@@ -88,7 +88,7 @@ export function removeResource(state: GameState, id: ResourceId, amount: number)
   return true;
 }
 export function getMaxStorage(state: GameState, id?: ResourceId): number {
-  if (id === 'agua') return (state.resources.odre || 0) * 30;
+  if (id === 'agua') return (RESOURCES.agua.baseMax || 0) + (state.resources.odre || 0) * 30;
   return state.maxStorage + state.buildings.reduce((sum, b) => sum + (BUILDINGS[b.id]?.storageBonus ?? 0) * b.count * b.level, 0);
 }
 export function addXp(state: GameState, skillId: SkillId, amount: number): string[] {
