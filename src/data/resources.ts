@@ -22,7 +22,9 @@ export type ResourceId =
   | 'lingote_cobre'
   | 'lingote_hierro'
   | 'carne_cruda'
-  | 'piel_animal';
+  | 'piel_animal'
+  | 'cuero'
+  | 'odre';
 
 export interface ResourceDef {
   id: ResourceId;
@@ -201,7 +203,9 @@ export const RESOURCES: Record<ResourceId, ResourceDef> = {
     baseMax: 40,
   },
   carne_cruda: { id: 'carne_cruda', name: 'Carne cruda', description: 'Carne obtenida de la caza. Debe cocinarse antes de consumirla.', category: 'alimento', icon: '🥩', baseMax: 100 },
-  piel_animal: { id: 'piel_animal', name: 'Piel animal', description: 'Piel sin procesar obtenida de animales. Puede curtirse para fabricar abrigo.', category: 'natural', icon: '🐾', baseMax: 80 },
+  piel_animal: { id: 'piel_animal', name: 'Piel animal', description: 'Piel sin procesar obtenida de animales. Puede curtirse para fabricar abrigo y recipientes.', category: 'natural', icon: '🐾', baseMax: 80 },
+  cuero: { id: 'cuero', name: 'Cuero', description: 'Piel curtida y tratada para confeccionar ropa y recipientes.', category: 'fabricado', icon: '🟫', baseMax: 100 },
+  odre: { id: 'odre', name: 'Odre', description: 'Recipiente reutilizable de cuero. Cada odre permite almacenar 30 unidades de agua.', category: 'componente', icon: '🫙', baseMax: 100 },
   lingote_hierro: {
     id: 'lingote_hierro',
     name: 'Lingote de hierro',
