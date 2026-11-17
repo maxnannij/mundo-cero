@@ -130,6 +130,11 @@ export const BUILDINGS: Record<string, BuildingDef> = {
     upgradeCostMult: 1.8,
     maxLevel: 6,
   },
+  trampa_caza: {
+    id: 'trampa_caza', name: 'Puesto de trampeo', description: 'Red de trampas y refugios de caza que generan carne y pieles con un trabajador asignado.', icon: '🪤', maxCount: 3,
+    baseCost: [{ resourceId: 'madera', amount: 35 }, { resourceId: 'fibra', amount: 15 }, { resourceId: 'cuerda', amount: 4 }], costScale: 1.7, requiredTech: 'caza_primitiva', workersRequired: 1,
+    production: [{ resourceId: 'carne_cruda', amountPerMinute: 0.35 }, { resourceId: 'piel_animal', amountPerMinute: 0.08 }], upgradeCostMult: 1.8, maxLevel: 5,
+  },
   horno: {
     id: 'horno',
     name: 'Horno',
