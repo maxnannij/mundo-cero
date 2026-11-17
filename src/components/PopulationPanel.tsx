@@ -1,13 +1,13 @@
 import { useGame } from '../store/GameContext';
 import { BUILDING_LIST } from '../data/buildings';
 import { getCalendarInfo, DAYS_PER_SEASON, DAYS_PER_YEAR } from '../data/calendar';
-import { ADULT_AGE_DAYS, getAssignedWorkers, getAvailableWorkers } from '../store/gameState';
+import { ADULT_AGE_DAYS, getAssignedWorkers, getAvailableWorkers, getAvailableResidents } from '../store/gameState';
 import { TOOL_LIST } from '../data/tools';
 
 function yearsOld(ageDays: number): number { return Math.floor(ageDays / DAYS_PER_YEAR); }
 
 export function PopulationPanel() {
-  const { state, doAssignWorker, doSetReproduction, doEquipResidentTool, doUnequipResidentTool } = useGame();
+  const { state, doAssignResidentToBuilding, doUnassignResidentFromBuilding, doSetReproduction, doEquipResidentTool, doUnequipResidentTool } = useGame();
   const calendar = getCalendarInfo(state.calendar);
   const residents = state.population.residents;
   const adults = residents.filter(r => r.ageDays >= ADULT_AGE_DAYS).length;
@@ -94,7 +94,7 @@ export function PopulationPanel() {
                 </div>
                 <div className="resident-equipment-slots"><span>Ropa: <b>Vacío</b></span><span>Arma: <b>Vacío</b></span><span>Accesorio: <b>Vacío</b></span></div>
               </div>
-              <p className="recipe-meta">Por ahora, el equipamiento organiza los objetos por aldeano. Las bonificaciones aplicadas a tareas individuales se activarán con la asignación de trabajos de la actualización 2.</p>
+              <p className="recipe-meta">El equipo de cada aldeano modifica su rendimiento cuando realiza una tarea compatible.</p>
               {resident.sex === 'mujer' && resident.partnerId && (
                 <div className="reproduction-progress">
                   {pregnant ? <span>🤰 Embarazo: {resident.pregnancyDaysRemaining} días restantes</span> :
@@ -116,13 +116,25 @@ export function PopulationPanel() {
         ) : state.buildings.filter(b => BUILDING_LIST.find(d => d.id === b.id)?.production).map(building => {
           const def = BUILDING_LIST.find(d => d.id === building.id)!;
           const max = (def.workersRequired || 1) * building.count;
+          const freeResidents = getAvailableResidents(state);
           return (
-            <div className="worker-row" key={building.id}>
-              <div><strong>{def.icon} {def.name}</strong><small>{building.workersAssigned}/{max} trabajadores</small></div>
-              <div className="worker-controls">
-                <button className="btn" disabled={building.workersAssigned <= 0} onClick={() => doAssignWorker(building.id, -1)}>−</button>
-                <button className="btn" disabled={available <= 0 || building.workersAssigned >= max} onClick={() => doAssignWorker(building.id, 1)}>+</button>
+            <div className="worker-assignment-card" key={building.id}>
+              <div className="worker-assignment-heading">
+                <strong>{def.icon} {def.name}</strong>
+                <small>{building.workerIds.length}/{max} trabajadores</small>
               </div>
+              <div className="assigned-resident-list">
+                {building.workerIds.map(id => {
+                  const resident = residents.find(r => r.id === id);
+                  return <div className="assigned-resident" key={id}><span>👤 {resident?.name || 'Aldeano'}</span><button className="btn danger" onClick={() => doUnassignResidentFromBuilding(building.id, id)}>Liberar</button></div>;
+                })}
+                {building.workerIds.length === 0 && <small className="empty">Sin trabajadores asignados.</small>}
+              </div>
+              <select className="field-select resident-tool-select" value="" disabled={freeResidents.length === 0 || building.workerIds.length >= max}
+                onChange={e => { if (e.target.value) doAssignResidentToBuilding(building.id, e.target.value); }}>
+                <option value="">{building.workerIds.length >= max ? 'Instalación completa' : freeResidents.length ? 'Asignar aldeano…' : 'No hay aldeanos libres'}</option>
+                {freeResidents.map(resident => <option key={resident.id} value={resident.id}>{resident.name}</option>)}
+              </select>
             </div>
           );
         })}
