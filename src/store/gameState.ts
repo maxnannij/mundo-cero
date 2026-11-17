@@ -5,8 +5,8 @@ import { BUILDINGS } from '../data/buildings';
 import { getCalendarInfo, DAYS_PER_YEAR, type CalendarState, seasonMultiplier } from '../data/calendar';
 
 export interface SkillState { level: number; xp: number; masteryLevel: number; masteryXp: number; specialization?: 'velocidad' | 'rendimiento'; }
-export interface BuildingInstance { id: string; level: number; count: number; workersAssigned: number; }
-export interface ActiveActivity { id: string; skillId: SkillId; activityId: string; startTime: number; progressMs: number; targetAmount?: number; actionsDone: number; }
+export interface BuildingInstance { id: string; level: number; count: number; workersAssigned: number; workerIds: string[]; }
+export interface ActiveActivity { id: string; skillId: SkillId; activityId: string; residentId: string; startTime: number; progressMs: number; targetAmount?: number; actionsDone: number; }
 export interface CraftQueueItem { recipeId: string; remaining: number; progressMs: number; startTime: number; automationOrderId?: string; }
 export interface ResidentEquipment { tool?: string; clothing?: string; weapon?: string; accessory?: string; }
 export interface Resident {
@@ -30,12 +30,13 @@ export interface GameState {
   completedObjectives: string[]; totalActions: Record<string, number>; log: { time: number; message: string }[];
   calendar: CalendarState; population: PopulationState; settings: { offlineCapHours: number };
 }
-export const SAVE_VERSION = 5;
-export const STORAGE_KEY = 'mundo-cero-save-v5';
-export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v4';
-export const PREVIOUS_STORAGE_KEY = 'mundo-cero-save-v3';
-export const OLDEST_STORAGE_KEY = 'mundo-cero-save-v2';
-export const ANCIENT_STORAGE_KEY = 'mundo-cero-save-v1';
+export const SAVE_VERSION = 6;
+export const STORAGE_KEY = 'mundo-cero-save-v6';
+export const LEGACY_STORAGE_KEY = 'mundo-cero-save-v5';
+export const PREVIOUS_STORAGE_KEY = 'mundo-cero-save-v4';
+export const OLDEST_STORAGE_KEY = 'mundo-cero-save-v3';
+export const ANCIENT_STORAGE_KEY = 'mundo-cero-save-v2';
+export const OLDESTEST_STORAGE_KEY = 'mundo-cero-save-v1';
 export const ADULT_AGE_DAYS = 18 * DAYS_PER_YEAR;
 export const MAX_POPULATION = 30;
 
@@ -132,12 +133,28 @@ export function getToolBonuses(state: GameState, category: string) {
   if (!toolId || !TOOLS[toolId]) return { speedMult: 1, yieldMult: 1, specialChance: 0 };
   return { speedMult: TOOLS[toolId].bonuses.speedMult ?? 1, yieldMult: TOOLS[toolId].bonuses.yieldMult ?? 1, specialChance: TOOLS[toolId].bonuses.specialChance ?? 0 };
 }
+export function getResidentToolBonuses(state: GameState, residentId: string, category: string) {
+  const resident = state.population.residents.find(r => r.id === residentId);
+  const toolId = resident?.equipment?.tool;
+  const tool = toolId ? TOOLS[toolId] : undefined;
+  if (!tool || tool.category !== category) return { speedMult: 1, yieldMult: 1, specialChance: 0 };
+  return { speedMult: tool.bonuses.speedMult ?? 1, yieldMult: tool.bonuses.yieldMult ?? 1, specialChance: tool.bonuses.specialChance ?? 0 };
+}
 export function getAssignedWorkers(state: GameState): number {
-  return state.buildings.reduce((sum, b) => sum + Math.max(0, b.workersAssigned || 0), 0);
+  return state.buildings.reduce((sum, b) => sum + (Array.isArray(b.workerIds) ? b.workerIds.length : Math.max(0, b.workersAssigned || 0)), 0);
+}
+export function getBusyResidentIds(state: GameState): Set<string> {
+  const ids = new Set<string>();
+  for (const building of state.buildings) for (const id of building.workerIds || []) ids.add(id);
+  for (const task of state.activeActivities) ids.add(task.residentId);
+  return ids;
+}
+export function getAvailableResidents(state: GameState): Resident[] {
+  const busy = getBusyResidentIds(state);
+  return state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0 && !busy.has(r.id));
 }
 export function getAvailableWorkers(state: GameState): number {
-  const adults = state.population.residents.filter(r => r.ageDays >= ADULT_AGE_DAYS && r.health > 0).length;
-  return Math.max(0, adults - getAssignedWorkers(state) - state.activeActivities.length);
+  return getAvailableResidents(state).length;
 }
 export function calculatePassiveProduction(state: GameState, deltaMs: number): Record<ResourceId, number> {
   const produced: Partial<Record<ResourceId, number>> = {};
